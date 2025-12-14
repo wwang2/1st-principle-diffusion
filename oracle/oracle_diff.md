@@ -1,0 +1,134 @@
+## Oracle: Gaussian mixture prior under linear-Gaussian forward kernel
+
+Assume the (possibly anisotropic / correlated) linear-Gaussian diffusion kernel
+
+```math
+q(\mathbf x_t\mid \mathbf x_0)=\mathcal N\!\big(\mathbf x_t;\,\alpha_t\,\mathbf x_0,\;\sigma_t^2\,\Sigma\big),\qquad \Sigma\succ 0,
+```
+
+where \(\mathbf x_0,\mathbf x_t\in\mathbb R^D\) (e.g. flatten \(N\times d\to D\)). Equivalently,
+
+```math
+\mathbf x_t=\alpha_t\,\mathbf x_0+\varepsilon,\qquad \varepsilon\sim\mathcal N(0,\sigma_t^2\Sigma),\ \varepsilon\perp \mathbf x_0.
+```
+
+Assume the data distribution is a \(K\)-component Gaussian mixture:
+
+```math
+p_0(\mathbf x_0)=\sum_{k=1}^K \pi_k\,\mathcal N(\mathbf x_0;\,\mu_k,\Lambda_k),
+\qquad \pi_k\ge 0,\ \sum_{k=1}^K\pi_k=1,\qquad \Lambda_k\succ 0.
+```
+
+---
+
+### Key observation (forward marginal stays a GMM)
+
+Conditioned on component \(k\), \(\mathbf x_0\mid k\sim\mathcal N(\mu_k,\Lambda_k)\). An affine transform of a Gaussian plus independent Gaussian noise is Gaussian, so
+
+```math
+\mathbf x_t\mid k\sim\mathcal N\!\Big(\alpha_t\mu_k,\ \alpha_t^2\Lambda_k+\sigma_t^2\Sigma\Big).
+```
+
+Therefore the marginal is analytic and remains a GMM:
+
+```math
+\boxed{
+ p_t(\mathbf x_t)
+ :=\int q(\mathbf x_t\mid \mathbf x_0)\,p_0(\mathbf x_0)\,d\mathbf x_0
+ =\sum_{k=1}^K \pi_k\,\mathcal N\!\Big(\mathbf x_t;\ \alpha_t\mu_k,\ C_{t,k}\Big)
+}
+\qquad C_{t,k}:=\alpha_t^2\Lambda_k+\sigma_t^2\Sigma.
+```
+
+So: mixture weights unchanged, means scaled by \(\alpha_t\), and covariances become “scaled + diffusion noise”.
+
+---
+
+### Posterior responsibility \(p(k\mid \mathbf x_t)\)
+
+By Bayes’ rule,
+
+```math
+\boxed{
+ r_{t,k}(\mathbf x_t)\ :=\ p(k\mid \mathbf x_t)
+ =\frac{\pi_k\,\mathcal N\!\big(\mathbf x_t;\alpha_t\mu_k,\ C_{t,k}\big)}{\sum_{j=1}^K \pi_j\,\mathcal N\!\big(\mathbf x_t;\alpha_t\mu_j,\ C_{t,j}\big)}
+}.
+```
+
+---
+
+### Component-conditional posterior \(p(\mathbf x_0\mid \mathbf x_t,k)\)
+
+For a fixed \(k\), this is a standard linear-Gaussian model:
+
+```math
+\mathbf x_0\mid k\sim\mathcal N(\mu_k,\Lambda_k),\qquad
+\mathbf x_t\mid \mathbf x_0\sim\mathcal N(\alpha_t\mathbf x_0,\sigma_t^2\Sigma).
+```
+
+Hence \(\mathbf x_0\mid \mathbf x_t,k\) is Gaussian:
+
+```math
+\boxed{
+ p(\mathbf x_0\mid \mathbf x_t,k)=\mathcal N\!\big(\mathbf x_0;\ m_{t,k}(\mathbf x_t),\ V_{t,k}\big)
+}
+```
+
+with
+
+```math
+\boxed{
+ V_{t,k}:=\Big(\Lambda_k^{-1}+\alpha_t^2(\sigma_t^2\Sigma)^{-1}\Big)^{-1},
+ \qquad
+ m_{t,k}(\mathbf x_t):=V_{t,k}\Big(\Lambda_k^{-1}\mu_k+\alpha_t(\sigma_t^2\Sigma)^{-1}\mathbf x_t\Big).
+}
+```
+
+---
+
+### Exact MMSE denoiser (oracle) \(\mathbb E[\mathbf x_0\mid \mathbf x_t]\)
+
+The full posterior is a mixture of the component posteriors:
+
+```math
+p(\mathbf x_0\mid \mathbf x_t)=\sum_{k=1}^K r_{t,k}(\mathbf x_t)\,\mathcal N\!\big(\mathbf x_0;\ m_{t,k}(\mathbf x_t),\ V_{t,k}\big).
+```
+
+Therefore the exact MMSE denoiser is
+
+```math
+\boxed{
+ \hat{\mathbf x}_0(\mathbf x_t)\ :=\ \mathbb E[\mathbf x_0\mid \mathbf x_t]
+ =\sum_{k=1}^K r_{t,k}(\mathbf x_t)\,m_{t,k}(\mathbf x_t).
+}
+```
+
+Since \(\varepsilon=\mathbf x_t-\alpha_t\mathbf x_0\), the conditional mean noise is
+
+```math
+\boxed{
+ \mathbb E[\varepsilon\mid \mathbf x_t]
+ =\mathbf x_t-\alpha_t\,\mathbb E[\mathbf x_0\mid \mathbf x_t]
+ =\mathbf x_t-\alpha_t\sum_{k=1}^K r_{t,k}(\mathbf x_t)\,m_{t,k}(\mathbf x_t).
+}
+```
+
+---
+
+### (Optional) Oracle score \(\nabla_{\mathbf x_t}\log p_t(\mathbf x_t)\)
+
+Because \(p_t\) is a GMM with component covariances \(C_{t,k}\),
+
+```math
+\nabla_{\mathbf x_t}\log \mathcal N(\mathbf x_t;\alpha_t\mu_k,C_{t,k})
+=-C_{t,k}^{-1}(\mathbf x_t-\alpha_t\mu_k).
+```
+
+Weighting by responsibilities gives
+
+```math
+\boxed{
+ \nabla_{\mathbf x_t}\log p_t(\mathbf x_t)
+ =\sum_{k=1}^K r_{t,k}(\mathbf x_t)\,\big[-C_{t,k}^{-1}(\mathbf x_t-\alpha_t\mu_k)\big].
+}
+```
