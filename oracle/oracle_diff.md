@@ -44,7 +44,9 @@ So: mixture weights unchanged, means scaled by \(\alpha_t\), and covariances bec
 
 ---
 
-### Posterior responsibility \(p(k\mid \mathbf x_t)\)
+### Posterior responsibility
+
+Target: `p(k | x_t)`
 
 By Bayes’ rule,
 
@@ -57,7 +59,9 @@ By Bayes’ rule,
 
 ---
 
-### Component-conditional posterior \(p(\mathbf x_0\mid \mathbf x_t,k)\)
+### Component-conditional posterior
+
+Target: `p(x_0 | x_t, k)`
 
 For a fixed \(k\), this is a standard linear-Gaussian model:
 
@@ -86,7 +90,9 @@ with
 
 ---
 
-### Exact MMSE denoiser (oracle) \(\mathbb E[\mathbf x_0\mid \mathbf x_t]\)
+### Exact MMSE denoiser (oracle)
+
+Target: `E[x_0 | x_t]`
 
 The full posterior is a mixture of the component posteriors:
 
@@ -115,7 +121,9 @@ Since \(\varepsilon=\mathbf x_t-\alpha_t\mathbf x_0\), the conditional mean nois
 
 ---
 
-### (Optional) Oracle score \(\nabla_{\mathbf x_t}\log p_t(\mathbf x_t)\)
+### (Optional) Oracle score
+
+Target: `∇_{x_t} log p_t(x_t)`
 
 Because \(p_t\) is a GMM with component covariances \(C_{t,k}\),
 
