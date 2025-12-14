@@ -1,6 +1,6 @@
 ## Diffusion (forward + reverse) — minimal notes
 
-### Defi.
+### Def.
 - Data: $\mathbf{x}_0$ (clean sample), typically $\mathbf{x}_0\in\mathbb{R}^{N\times d}$ (often $d=3$)
 - Time: $t\in[0,1]$ (0=data, 1=prior/noise)
 - Schedules: $\alpha_t$ (signal scale), $\sigma_t$ (noise scale). VP: $\sigma_t^2=1-\alpha_t^2$
