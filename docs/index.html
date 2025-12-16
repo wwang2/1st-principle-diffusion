@@ -1,0 +1,180 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>First Principles Diffusion</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Source+Serif+4:opsz,wght@8..60,400;8..60,600&family=Inter:wght@400;500&display=swap" rel="stylesheet">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Source Serif 4', Georgia, serif;
+            background: #fafafa;
+            color: #1a1a1a;
+            line-height: 1.7;
+            font-size: 18px;
+        }
+
+        .container {
+            max-width: 700px;
+            margin: 0 auto;
+            padding: 4rem 1.5rem;
+        }
+
+        header {
+            margin-bottom: 3rem;
+        }
+
+        h1 {
+            font-size: 2.4rem;
+            font-weight: 600;
+            line-height: 1.2;
+            margin-bottom: 1rem;
+            letter-spacing: -0.02em;
+        }
+
+        .subtitle {
+            color: #666;
+            font-size: 1.1rem;
+        }
+
+        section {
+            margin: 2.5rem 0;
+        }
+
+        h2 {
+            font-size: 1.1rem;
+            font-weight: 600;
+            margin-bottom: 1rem;
+            letter-spacing: -0.01em;
+        }
+
+        .demo-list {
+            list-style: none;
+        }
+
+        .demo-list li {
+            border-bottom: 1px solid #e5e5e5;
+        }
+
+        .demo-list li:first-child {
+            border-top: 1px solid #e5e5e5;
+        }
+
+        .demo-list a {
+            display: block;
+            padding: 1rem 0;
+            text-decoration: none;
+            color: inherit;
+            transition: background 0.15s;
+        }
+
+        .demo-list a:hover {
+            background: #f5f5f5;
+            margin: 0 -1rem;
+            padding-left: 1rem;
+            padding-right: 1rem;
+        }
+
+        .demo-title {
+            font-weight: 500;
+            margin-bottom: 0.25rem;
+        }
+
+        .demo-desc {
+            font-size: 0.95rem;
+            color: #666;
+        }
+
+        .topics {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 0.5rem 2rem;
+            font-size: 0.95rem;
+            color: #666;
+        }
+
+        .topics span {
+            padding: 0.25rem 0;
+        }
+
+        footer {
+            margin-top: 4rem;
+            padding-top: 1.5rem;
+            border-top: 1px solid #e5e5e5;
+            font-family: 'Inter', sans-serif;
+            font-size: 0.8rem;
+            color: #999;
+        }
+
+        footer a {
+            color: #666;
+            text-decoration: none;
+        }
+
+        footer a:hover {
+            color: #1a1a1a;
+        }
+
+        @media (max-width: 640px) {
+            .container {
+                padding: 2.5rem 1rem;
+            }
+            
+            h1 {
+                font-size: 1.8rem;
+            }
+
+            .topics {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>First Principles Diffusion</h1>
+            <p class="subtitle">
+                Interactive notes on transport, diffusion, and flow-based generative models.
+            </p>
+        </header>
+
+        <section>
+            <h2>Interactive Demos</h2>
+            <ul class="demo-list">
+                <li>
+                    <a href="oracle_flow.html">
+                        <div class="demo-title">Oracle Probability Flow</div>
+                        <div class="demo-desc">
+                            GMM forward diffusion with exact posterior responsibilities
+                        </div>
+                    </a>
+                </li>
+            </ul>
+        </section>
+
+        <section>
+            <h2>Topics</h2>
+            <div class="topics">
+                <span>Core — foundational concepts</span>
+                <span>Oracle — exact GMM solutions</span>
+                <span>Force — force matching </span>
+                <span>Manifold — constrained sampling</span>
+                <span>Monge — optimal transport</span>
+                <span>Reversibility — time reversal / entropy production </span>
+            </div>
+        </section>
+
+        <footer>
+            <a href="https://github.com/wujiewang/1st-principle-diffusion">GitHub</a>
+        </footer>
+    </div>
+</body>
+</html>

@@ -1,0 +1,1119 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Oracle Diffusion — GMM Probability Flow</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Source+Serif+4:opsz,wght@8..60,400;8..60,600&family=Inter:wght@400;500&family=JetBrains+Mono:wght@400&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        body {
+            font-family: 'Source Serif 4', Georgia, serif;
+            background: #fafafa;
+            color: #1a1a1a;
+            line-height: 1.7;
+            font-size: 18px;
+        }
+
+        .container {
+            max-width: 1000px;
+            margin: 0 auto;
+            padding: 3rem 1.5rem 4rem;
+        }
+
+        header { margin-bottom: 2rem; }
+
+        .back-link {
+            font-family: 'Inter', sans-serif;
+            font-size: 0.8rem;
+            color: #666;
+            text-decoration: none;
+            display: inline-block;
+            margin-bottom: 1.5rem;
+        }
+        .back-link:hover { color: #1a1a1a; }
+
+        h1 {
+            font-size: 2rem;
+            font-weight: 600;
+            line-height: 1.2;
+            margin-bottom: 0.5rem;
+            letter-spacing: -0.02em;
+        }
+
+        .subtitle { color: #666; font-size: 1rem; }
+
+        p { margin-bottom: 1rem; color: #333; }
+
+        .figure {
+            margin: 2rem 0;
+            background: #fff;
+            border: 1px solid #e5e5e5;
+            border-radius: 8px;
+            overflow: hidden;
+        }
+
+        .viz-container {
+            display: grid;
+            grid-template-columns: 80px 1fr 80px;
+            grid-template-rows: 1fr 100px;
+            height: 520px;
+        }
+
+        .density-left, .density-right {
+            background: #fafafa;
+            border-right: 1px solid #eee;
+            position: relative;
+        }
+        .density-right { border-right: none; border-left: 1px solid #eee; }
+
+        .density-label {
+            position: absolute;
+            top: 8px;
+            left: 50%;
+            transform: translateX(-50%);
+            font-family: 'Inter', sans-serif;
+            font-size: 0.65rem;
+            color: #999;
+            text-transform: uppercase;
+            letter-spacing: 0.3px;
+            white-space: nowrap;
+        }
+
+        .main-canvas-container {
+            position: relative;
+            background: #fefefe;
+        }
+
+        #flowCanvas, #leftDensity, #rightDensity, #bottomDensity {
+            width: 100%;
+            height: 100%;
+        }
+
+        .density-bottom {
+            grid-column: 1 / -1;
+            background: #fafafa;
+            border-top: 1px solid #eee;
+            position: relative;
+        }
+
+        .density-bottom-label {
+            position: absolute;
+            top: 8px;
+            left: 12px;
+            font-family: 'Inter', sans-serif;
+            font-size: 0.65rem;
+            color: #999;
+        }
+
+        .hover-panel {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            background: rgba(255, 255, 255, 0.96);
+            border: 1px solid #e0e0e0;
+            border-radius: 6px;
+            padding: 0.75rem 0.875rem;
+            font-family: 'Inter', sans-serif;
+            font-size: 0.75rem;
+            min-width: 180px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+            display: none;
+            z-index: 10;
+        }
+        .hover-panel.active { display: block; }
+
+        .hover-panel .title {
+            font-size: 0.65rem;
+            text-transform: uppercase;
+            letter-spacing: 0.4px;
+            color: #999;
+            margin-bottom: 0.4rem;
+        }
+
+        .hover-row {
+            display: flex;
+            justify-content: space-between;
+            padding: 0.2rem 0;
+            color: #666;
+        }
+        .hover-row .val {
+            font-family: 'JetBrains Mono', monospace;
+            color: #1a1a1a;
+        }
+
+        .resp-section {
+            margin-top: 0.6rem;
+            padding-top: 0.6rem;
+            border-top: 1px solid #eee;
+        }
+
+        .resp-bar { margin: 0.35rem 0; }
+        .resp-bar-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 0.15rem;
+            font-size: 0.7rem;
+        }
+        .resp-bar-header .label {
+            display: flex;
+            align-items: center;
+            gap: 0.35rem;
+        }
+        .mode-dot {
+            width: 6px;
+            height: 6px;
+            border-radius: 50%;
+        }
+        .resp-bar-track {
+            height: 3px;
+            background: #eee;
+            border-radius: 2px;
+            overflow: hidden;
+        }
+        .resp-bar-fill {
+            height: 100%;
+            border-radius: 2px;
+            transition: width 0.1s;
+        }
+
+        .controls {
+            display: flex;
+            align-items: center;
+            gap: 1.25rem;
+            padding: 0.6rem 1rem;
+            background: #f8f8f8;
+            border-top: 1px solid #e5e5e5;
+            font-family: 'Inter', sans-serif;
+            font-size: 0.75rem;
+        }
+
+        .control-group {
+            display: flex;
+            align-items: center;
+            gap: 0.4rem;
+            color: #666;
+        }
+        .control-group input[type="range"] {
+            width: 90px;
+            accent-color: #1a1a1a;
+        }
+        .control-group .value {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.7rem;
+            color: #1a1a1a;
+            min-width: 28px;
+        }
+
+        .btn {
+            padding: 0.35rem 0.7rem;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            background: #fff;
+            font-family: 'Inter', sans-serif;
+            font-size: 0.7rem;
+            color: #333;
+            cursor: pointer;
+            transition: all 0.15s;
+        }
+        .btn:hover { background: #f0f0f0; border-color: #ccc; }
+
+        section { margin: 2rem 0; }
+        h2 {
+            font-size: 1.2rem;
+            font-weight: 600;
+            margin-bottom: 0.75rem;
+            letter-spacing: -0.01em;
+        }
+
+        .math-block {
+            background: #fff;
+            border: 1px solid #e5e5e5;
+            border-radius: 6px;
+            padding: 0.875rem 1rem;
+            margin: 0.75rem 0;
+            overflow-x: auto;
+        }
+        .math-label {
+            font-family: 'Inter', sans-serif;
+            font-size: 0.7rem;
+            color: #999;
+            text-transform: uppercase;
+            letter-spacing: 0.4px;
+            margin-bottom: 0.4rem;
+        }
+
+        .config-panel {
+            background: #fff;
+            border: 1px solid #e5e5e5;
+            border-radius: 6px;
+            padding: 0.875rem;
+            margin-top: 1.25rem;
+        }
+        .config-panel h3 {
+            font-family: 'Inter', sans-serif;
+            font-size: 0.7rem;
+            text-transform: uppercase;
+            letter-spacing: 0.4px;
+            color: #999;
+            margin-bottom: 0.6rem;
+        }
+
+        .mode-row {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+            padding: 0.4rem 0;
+            border-bottom: 1px solid #f0f0f0;
+            font-family: 'Inter', sans-serif;
+            font-size: 0.75rem;
+        }
+        .mode-row:last-child { border-bottom: none; }
+        .mode-row .label {
+            display: flex;
+            align-items: center;
+            gap: 0.35rem;
+            min-width: 55px;
+            color: #666;
+        }
+        .mode-row input {
+            width: 52px;
+            padding: 0.25rem 0.4rem;
+            border: 1px solid #ddd;
+            border-radius: 3px;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.7rem;
+            text-align: center;
+        }
+        .mode-row input:focus { outline: none; border-color: #999; }
+        .mode-row .param-label {
+            font-size: 0.65rem;
+            color: #999;
+            margin-right: 0.2rem;
+        }
+
+        footer {
+            margin-top: 3rem;
+            padding-top: 1.25rem;
+            border-top: 1px solid #e5e5e5;
+            font-family: 'Inter', sans-serif;
+            font-size: 0.75rem;
+            color: #999;
+        }
+        footer a { color: #666; text-decoration: none; }
+        footer a:hover { color: #1a1a1a; }
+
+        @media (max-width: 700px) {
+            .container { padding: 1.5rem 1rem; }
+            h1 { font-size: 1.5rem; }
+            .viz-container {
+                grid-template-columns: 60px 1fr 60px;
+                height: 450px;
+            }
+            .controls { flex-wrap: wrap; gap: 0.6rem; }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <a href="index.html" class="back-link">← back</a>
+            <h1>Oracle Diffusion</h1>
+            <p class="subtitle">Visualizing how a Gaussian mixture evolves under forward diffusion</p>
+        </header>
+
+        <p>
+            When the data distribution is a GMM and the forward process is linear-Gaussian, 
+            the marginal <span id="inline-pt"></span> remains a GMM at all times.
+            The curves are solutions to the <strong>probability flow ODE</strong>—deterministic 
+            trajectories that transport probability mass from data to noise.
+        </p>
+
+        <div class="figure">
+            <div class="viz-container">
+                <div class="density-left">
+                    <div class="density-label">p₀(x) data</div>
+                    <canvas id="leftDensity"></canvas>
+                </div>
+                <div class="main-canvas-container">
+                    <canvas id="flowCanvas"></canvas>
+                    <div class="hover-panel" id="hoverPanel">
+                        <div class="title">At this point</div>
+                        <div class="hover-row">
+                            <span>x</span>
+                            <span class="val" id="hoverX">—</span>
+                        </div>
+                        <div class="hover-row">
+                            <span>t</span>
+                            <span class="val" id="hoverT">—</span>
+                        </div>
+                        <div class="hover-row">
+                            <span>p_t(x)</span>
+                            <span class="val" id="hoverDensity">—</span>
+                        </div>
+                        <div class="resp-section">
+                            <div class="title">Posterior p(k|x,t)</div>
+                            <div id="respBars"></div>
+                        </div>
+                    </div>
+                </div>
+                <div class="density-right">
+                    <div class="density-label">p₁(x) noise</div>
+                    <canvas id="rightDensity"></canvas>
+                </div>
+                <div class="density-bottom">
+                    <div class="density-bottom-label" id="bottomLabel">Density slice: p_t(x) at t = 0.00</div>
+                    <canvas id="bottomDensity"></canvas>
+                </div>
+            </div>
+            <div class="controls">
+                <div class="control-group">
+                    <span>time t</span>
+                    <input type="range" id="timeSlider" min="0" max="1" step="0.01" value="0">
+                    <span class="value" id="timeValue">0.00</span>
+                </div>
+                <div class="control-group">
+                    <span>flow lines</span>
+                    <input type="range" id="flowLinesSlider" min="0" max="60" step="1" value="35">
+                </div>
+                <button class="btn" id="playBtn">▶ Play</button>
+                <button class="btn" id="resetBtn">Reset</button>
+            </div>
+        </div>
+
+        <p>
+            Hover anywhere to see the posterior responsibility <span id="inline-resp"></span>—the 
+            probability that a noisy observation came from each mode. The bottom panel shows the 
+            density slice at the current time (or hover position).
+        </p>
+
+        <div class="config-panel">
+            <h3>GMM Configuration</h3>
+            <div id="modeConfigs"></div>
+        </div>
+
+        <section>
+            <h2>Key Equations</h2>
+            
+            <div class="math-block">
+                <div class="math-label">Forward marginal (GMM stays GMM)</div>
+                <div id="math-marginal"></div>
+            </div>
+
+            <div class="math-block">
+                <div class="math-label">Posterior responsibility</div>
+                <div id="math-responsibility"></div>
+            </div>
+
+            <div class="math-block">
+                <div class="math-label">Probability flow ODE</div>
+                <div id="math-flow"></div>
+            </div>
+        </section>
+
+        <footer>
+            <a href="https://github.com/wujiewang/1st-principle-diffusion">View source</a> · First Principles Diffusion
+        </footer>
+    </div>
+
+    <script>
+        // ============================================================
+        // MATH
+        // ============================================================
+        
+        function gaussianPDF(x, mu, sigma2) {
+            return Math.exp(-0.5 * Math.pow(x - mu, 2) / sigma2) / Math.sqrt(2 * Math.PI * sigma2);
+        }
+
+        class GMMOracle {
+            constructor(modes) {
+                this.modes = JSON.parse(JSON.stringify(modes));
+                this.normalizeWeights();
+            }
+
+            normalizeWeights() {
+                const total = this.modes.reduce((s, m) => s + m.pi, 0);
+                this.modes.forEach(m => m.pi /= total);
+            }
+
+            alpha(t) { return Math.sqrt(1 - t); }
+            sigma2_noise(t) { return t + 0.001; }
+
+            componentVariance(k, t) {
+                const a = this.alpha(t);
+                return a * a * this.modes[k].sigma2 + this.sigma2_noise(t);
+            }
+
+            componentMean(k, t) {
+                return this.alpha(t) * this.modes[k].mu;
+            }
+
+            marginalDensity(x, t) {
+                let d = 0;
+                for (let k = 0; k < this.modes.length; k++) {
+                    d += this.modes[k].pi * gaussianPDF(x, this.componentMean(k, t), this.componentVariance(k, t));
+                }
+                return d;
+            }
+
+            responsibility(x, t) {
+                const resp = [];
+                let total = 0;
+                for (let k = 0; k < this.modes.length; k++) {
+                    const r = this.modes[k].pi * gaussianPDF(x, this.componentMean(k, t), this.componentVariance(k, t));
+                    resp.push(r);
+                    total += r;
+                }
+                return resp.map(r => r / (total + 1e-10));
+            }
+
+            score(x, t) {
+                const resp = this.responsibility(x, t);
+                let s = 0;
+                for (let k = 0; k < this.modes.length; k++) {
+                    s += resp[k] * (-(x - this.componentMean(k, t)) / this.componentVariance(k, t));
+                }
+                return s;
+            }
+
+            // Probability flow ODE: dx/dt = f(x,t) - 0.5 * g(t)^2 * score
+            // For VP: f(x,t) = -0.5 * beta(t) * x, g(t)^2 = beta(t)
+            // Simplified: dx/dt = -0.5 * (x + score)
+            flowVelocity(x, t) {
+                const t_safe = Math.max(t, 0.001);
+                const score = this.score(x, t_safe);
+                return -0.5 * (x + score);
+            }
+        }
+
+        // ============================================================
+        // VISUALIZATION
+        // ============================================================
+
+        const canvas = document.getElementById('flowCanvas');
+        const ctx = canvas.getContext('2d');
+        const leftCanvas = document.getElementById('leftDensity');
+        const leftCtx = leftCanvas.getContext('2d');
+        const rightCanvas = document.getElementById('rightDensity');
+        const rightCtx = rightCanvas.getContext('2d');
+        const bottomCanvas = document.getElementById('bottomDensity');
+        const bottomCtx = bottomCanvas.getContext('2d');
+
+        const modeColors = ['#2563eb', '#9333ea', '#059669'];
+
+        let gmmModes = [
+            { pi: 0.4, mu: -2.0, sigma2: 0.25 },
+            { pi: 0.35, mu: 1.5, sigma2: 0.35 },
+            { pi: 0.25, mu: 4.0, sigma2: 0.2 },
+        ];
+
+        let gmm = new GMMOracle(gmmModes);
+        let currentTime = 0;
+        let hoverTime = null;
+        let hoverX = null;  // Store hover x position for bottom plot
+        let numFlowLines = 35;
+        let isPlaying = false;
+        let animationId = null;
+        let hoverPos = null;
+
+        const xRange = [-5, 7];
+
+        function setupCanvas(cvs) {
+            const container = cvs.parentElement;
+            const dpr = window.devicePixelRatio || 1;
+            cvs.width = container.clientWidth * dpr;
+            cvs.height = container.clientHeight * dpr;
+            const ctx = cvs.getContext('2d');
+            ctx.scale(dpr, dpr);
+            cvs.style.width = container.clientWidth + 'px';
+            cvs.style.height = container.clientHeight + 'px';
+        }
+
+        function resizeAll() {
+            setupCanvas(canvas);
+            setupCanvas(leftCanvas);
+            setupCanvas(rightCanvas);
+            setupCanvas(bottomCanvas);
+        }
+
+        function getCanvasSize(cvs) {
+            return {
+                w: cvs.width / (window.devicePixelRatio || 1),
+                h: cvs.height / (window.devicePixelRatio || 1)
+            };
+        }
+
+        function tToCanvas(t) {
+            const { w } = getCanvasSize(canvas);
+            const pad = 10;
+            return pad + t * (w - 2 * pad);
+        }
+
+        function xToCanvas(x) {
+            const { h } = getCanvasSize(canvas);
+            const pad = 25;
+            const norm = (x - xRange[0]) / (xRange[1] - xRange[0]);
+            return h - pad - norm * (h - 2 * pad);
+        }
+
+        function canvasToT(cx) {
+            const { w } = getCanvasSize(canvas);
+            const pad = 10;
+            return (cx - pad) / (w - 2 * pad);
+        }
+
+        function canvasToX(cy) {
+            const { h } = getCanvasSize(canvas);
+            const pad = 25;
+            const norm = (h - pad - cy) / (h - 2 * pad);
+            return xRange[0] + norm * (xRange[1] - xRange[0]);
+        }
+
+        // Compute CDF of p_1(x) numerically
+        function computeCDF_t1() {
+            const samples = 500;
+            const dx = (xRange[1] - xRange[0]) / samples;
+            let cumulative = 0;
+            const cdf = [];
+            
+            for (let i = 0; i <= samples; i++) {
+                const x = xRange[0] + i * dx;
+                const d = gmm.marginalDensity(x, 1);
+                cumulative += d * dx;
+                cdf.push({ x, cdf: cumulative });
+            }
+            
+            // Normalize
+            const total = cumulative;
+            cdf.forEach(pt => pt.cdf /= total);
+            
+            return cdf;
+        }
+
+        // Get x value at a given quantile from t=1 distribution
+        function quantileT1(q, cdfTable) {
+            for (let i = 1; i < cdfTable.length; i++) {
+                if (cdfTable[i].cdf >= q) {
+                    // Linear interpolation
+                    const prev = cdfTable[i - 1];
+                    const curr = cdfTable[i];
+                    const t = (q - prev.cdf) / (curr.cdf - prev.cdf + 1e-10);
+                    return prev.x + t * (curr.x - prev.x);
+                }
+            }
+            return cdfTable[cdfTable.length - 1].x;
+        }
+
+        // Compute probability flow ODE solution using RK4 (reverse: from t=1 to t=0)
+        function computeFlowLineReverse(x1) {
+            const points = [{ x: x1, t: 1 }];
+            let x = x1, t = 1;
+            const dt = -0.008;  // negative for reverse
+            
+            while (t > 0) {
+                const t_safe = Math.max(t, 0.001);
+                const k1 = gmm.flowVelocity(x, t_safe);
+                const k2 = gmm.flowVelocity(x + dt/2 * k1, Math.max(t + dt/2, 0.001));
+                const k3 = gmm.flowVelocity(x + dt/2 * k2, Math.max(t + dt/2, 0.001));
+                const k4 = gmm.flowVelocity(x + dt * k3, Math.max(t + dt, 0.001));
+                
+                x += dt/6 * (k1 + 2*k2 + 2*k3 + k4);
+                t += dt;
+                
+                if (x < xRange[0] - 2 || x > xRange[1] + 2) break;
+                points.push({ x, t: Math.max(t, 0) });
+            }
+            return points.reverse();  // Return in forward order (t=0 to t=1)
+        }
+
+        // Cache for CDF table
+        let cdfTableT1 = null;
+        
+        function getFlowLineStartPoints(n) {
+            // Recompute CDF if GMM changed
+            cdfTableT1 = computeCDF_t1();
+            
+            const points = [];
+            for (let i = 0; i < n; i++) {
+                // Use quantiles: avoid extremes (0.02 to 0.98)
+                const q = 0.02 + (i / (n - 1)) * 0.96;
+                const x = quantileT1(q, cdfTableT1);
+                points.push(x);
+            }
+            return points;
+        }
+
+        function drawLeftDensity() {
+            const { w, h } = getCanvasSize(leftCanvas);
+            leftCtx.clearRect(0, 0, w, h);
+            
+            // Draw p_0(x) - data distribution
+            const samples = 150;
+            let maxD = 0;
+            const densities = [];
+            for (let i = 0; i < samples; i++) {
+                const x = xRange[0] + (i / (samples - 1)) * (xRange[1] - xRange[0]);
+                const d = gmm.marginalDensity(x, 0);
+                densities.push({ x, d });
+                if (d > maxD) maxD = d;
+            }
+            
+            // Use exact same y-coordinate as main canvas's xToCanvas
+            // The canvases should have the same height since they're in the same grid row
+            function yCoord(x) {
+                return xToCanvas(x);  // Use the main canvas function directly
+            }
+            
+            // Fill area
+            leftCtx.beginPath();
+            leftCtx.moveTo(w, yCoord(densities[0].x));
+            densities.forEach((pt) => {
+                const y = yCoord(pt.x);
+                const px = w - (pt.d / maxD) * (w - 8);
+                leftCtx.lineTo(px, y);
+            });
+            leftCtx.lineTo(w, yCoord(densities[densities.length - 1].x));
+            leftCtx.closePath();
+            leftCtx.fillStyle = 'rgba(37, 99, 235, 0.15)';
+            leftCtx.fill();
+            
+            // Stroke line
+            leftCtx.beginPath();
+            densities.forEach((pt, i) => {
+                const y = yCoord(pt.x);
+                const px = w - (pt.d / maxD) * (w - 8);
+                i === 0 ? leftCtx.moveTo(px, y) : leftCtx.lineTo(px, y);
+            });
+            leftCtx.strokeStyle = '#2563eb';
+            leftCtx.lineWidth = 1.5;
+            leftCtx.stroke();
+        }
+
+        function drawRightDensity() {
+            const { w, h } = getCanvasSize(rightCanvas);
+            rightCtx.clearRect(0, 0, w, h);
+            
+            // Draw p_1(x) - noise distribution
+            const samples = 150;
+            let maxD = 0;
+            const densities = [];
+            for (let i = 0; i < samples; i++) {
+                const x = xRange[0] + (i / (samples - 1)) * (xRange[1] - xRange[0]);
+                const d = gmm.marginalDensity(x, 1);
+                densities.push({ x, d });
+                if (d > maxD) maxD = d;
+            }
+            
+            // Use exact same y-coordinate as main canvas's xToCanvas
+            function yCoord(x) {
+                return xToCanvas(x);  // Use the main canvas function directly
+            }
+            
+            // Fill area
+            rightCtx.beginPath();
+            rightCtx.moveTo(0, yCoord(densities[0].x));
+            densities.forEach((pt) => {
+                const y = yCoord(pt.x);
+                const px = (pt.d / maxD) * (w - 8);
+                rightCtx.lineTo(px, y);
+            });
+            rightCtx.lineTo(0, yCoord(densities[densities.length - 1].x));
+            rightCtx.closePath();
+            rightCtx.fillStyle = 'rgba(100, 100, 100, 0.1)';
+            rightCtx.fill();
+            
+            // Stroke line
+            rightCtx.beginPath();
+            densities.forEach((pt, i) => {
+                const y = yCoord(pt.x);
+                const px = (pt.d / maxD) * (w - 8);
+                i === 0 ? rightCtx.moveTo(px, y) : rightCtx.lineTo(px, y);
+            });
+            rightCtx.strokeStyle = '#666';
+            rightCtx.lineWidth = 1.5;
+            rightCtx.stroke();
+        }
+
+        function drawBottomDensity(t, markerX = null) {
+            const { w, h } = getCanvasSize(bottomCanvas);
+            bottomCtx.clearRect(0, 0, w, h);
+            
+            const padLeft = 80, padRight = 80, padTop = 25, padBottom = 15;
+            const plotW = w - padLeft - padRight;
+            const plotH = h - padTop - padBottom;
+            
+            // Update label
+            document.getElementById('bottomLabel').textContent = `Density slice: p_t(x) at t = ${t.toFixed(2)}`;
+            
+            // Compute densities
+            const samples = 200;
+            let maxD = 0;
+            const densities = [];
+            for (let i = 0; i < samples; i++) {
+                const x = xRange[0] + (i / (samples - 1)) * (xRange[1] - xRange[0]);
+                const d = gmm.marginalDensity(x, t);
+                const resp = gmm.responsibility(x, t);
+                densities.push({ x, d, resp });
+                if (d > maxD) maxD = d;
+            }
+            
+            // Draw axis
+            bottomCtx.strokeStyle = '#ddd';
+            bottomCtx.lineWidth = 1;
+            bottomCtx.beginPath();
+            bottomCtx.moveTo(padLeft, h - padBottom);
+            bottomCtx.lineTo(padLeft + plotW, h - padBottom);
+            bottomCtx.stroke();
+            
+            // Fill with blended colors
+            densities.forEach((pt, i) => {
+                if (pt.d < 0.001) return;
+                const px = padLeft + (pt.x - xRange[0]) / (xRange[1] - xRange[0]) * plotW;
+                const barH = (pt.d / maxD) * (plotH - 5);
+                
+                let r = 0, g = 0, b = 0;
+                pt.resp.forEach((resp, k) => {
+                    const col = modeColors[k];
+                    r += resp * parseInt(col.slice(1, 3), 16);
+                    g += resp * parseInt(col.slice(3, 5), 16);
+                    b += resp * parseInt(col.slice(5, 7), 16);
+                });
+                
+                bottomCtx.fillStyle = `rgba(${Math.round(r)}, ${Math.round(g)}, ${Math.round(b)}, 0.6)`;
+                const barW = plotW / samples + 1;
+                bottomCtx.fillRect(px - barW/2, h - padBottom - barH, barW, barH);
+            });
+            
+            // Draw line
+            bottomCtx.beginPath();
+            densities.forEach((pt, i) => {
+                const px = padLeft + (pt.x - xRange[0]) / (xRange[1] - xRange[0]) * plotW;
+                const py = h - padBottom - (pt.d / maxD) * (plotH - 5);
+                i === 0 ? bottomCtx.moveTo(px, py) : bottomCtx.lineTo(px, py);
+            });
+            bottomCtx.strokeStyle = '#333';
+            bottomCtx.lineWidth = 1.5;
+            bottomCtx.stroke();
+            
+            // Draw marker at hover position
+            if (markerX !== null && markerX >= xRange[0] && markerX <= xRange[1]) {
+                const markerPx = padLeft + (markerX - xRange[0]) / (xRange[1] - xRange[0]) * plotW;
+                const markerD = gmm.marginalDensity(markerX, t);
+                const markerPy = h - padBottom - (markerD / maxD) * (plotH - 5);
+                
+                // Vertical line from axis to point
+                bottomCtx.strokeStyle = 'rgba(0, 0, 0, 0.2)';
+                bottomCtx.lineWidth = 1;
+                bottomCtx.setLineDash([3, 3]);
+                bottomCtx.beginPath();
+                bottomCtx.moveTo(markerPx, h - padBottom);
+                bottomCtx.lineTo(markerPx, markerPy);
+                bottomCtx.stroke();
+                bottomCtx.setLineDash([]);
+                
+                // Point on curve
+                bottomCtx.beginPath();
+                bottomCtx.arc(markerPx, markerPy, 5, 0, 2 * Math.PI);
+                bottomCtx.fillStyle = '#fff';
+                bottomCtx.fill();
+                bottomCtx.strokeStyle = '#333';
+                bottomCtx.lineWidth = 1.5;
+                bottomCtx.stroke();
+                
+                // Label
+                bottomCtx.fillStyle = '#333';
+                bottomCtx.font = '10px Inter, sans-serif';
+                bottomCtx.textAlign = 'center';
+                bottomCtx.fillText(`x=${markerX.toFixed(1)}`, markerPx, markerPy - 10);
+            }
+            
+            // X labels
+            bottomCtx.fillStyle = '#999';
+            bottomCtx.font = '10px Inter, sans-serif';
+            bottomCtx.textAlign = 'center';
+            for (let x = -4; x <= 6; x += 2) {
+                const px = padLeft + (x - xRange[0]) / (xRange[1] - xRange[0]) * plotW;
+                bottomCtx.fillText(x.toString(), px, h - 3);
+            }
+        }
+
+        function draw() {
+            const { w, h } = getCanvasSize(canvas);
+            ctx.clearRect(0, 0, w, h);
+
+            // Light grid
+            ctx.strokeStyle = '#eee';
+            ctx.lineWidth = 1;
+            for (let t = 0; t <= 1; t += 0.25) {
+                const cx = tToCanvas(t);
+                ctx.beginPath();
+                ctx.moveTo(cx, 5);
+                ctx.lineTo(cx, h - 25);
+                ctx.stroke();
+            }
+
+            // Density heatmap
+            const slices = 100, samples = 180;
+            for (let ti = 0; ti <= slices; ti++) {
+                const t = ti / slices;
+                const cx = tToCanvas(t);
+                const sw = (w - 20) / slices + 1;
+                
+                for (let xi = 0; xi < samples; xi++) {
+                    const x = xRange[0] + (xi / samples) * (xRange[1] - xRange[0]);
+                    const cy = xToCanvas(x);
+                    
+                    const density = gmm.marginalDensity(x, t);
+                    const alpha = Math.min(density * 2, 0.75);
+                    
+                    if (alpha > 0.02) {
+                        const resp = gmm.responsibility(x, t);
+                        let r = 0, g = 0, b = 0;
+                        resp.forEach((rk, k) => {
+                            const col = modeColors[k];
+                            r += rk * parseInt(col.slice(1, 3), 16);
+                            g += rk * parseInt(col.slice(3, 5), 16);
+                            b += rk * parseInt(col.slice(5, 7), 16);
+                        });
+                        
+                        ctx.fillStyle = `rgba(${Math.round(r)}, ${Math.round(g)}, ${Math.round(b)}, ${alpha})`;
+                        const ch = (h - 30) / samples + 1;
+                        ctx.fillRect(cx - sw/2, cy - ch/2, sw, ch);
+                    }
+                }
+            }
+
+            // Flow lines (probability flow ODE solutions from t=1 quantiles)
+            ctx.lineWidth = 1;
+            ctx.strokeStyle = 'rgba(60, 60, 60, 0.45)';
+            
+            if (numFlowLines > 0) {
+                const startPoints = getFlowLineStartPoints(numFlowLines);
+                
+                for (const x1 of startPoints) {
+                    const line = computeFlowLineReverse(x1);
+                    
+                    if (line.length < 2) continue;
+                    
+                    ctx.beginPath();
+                    line.forEach((pt, idx) => {
+                        const cx = tToCanvas(pt.t);
+                        const cy = xToCanvas(pt.x);
+                        idx === 0 ? ctx.moveTo(cx, cy) : ctx.lineTo(cx, cy);
+                    });
+                    ctx.stroke();
+                }
+            }
+
+            // Time indicator line
+            const displayTime = hoverTime !== null ? hoverTime : currentTime;
+            if (displayTime > 0.001) {
+                const tcx = tToCanvas(displayTime);
+                ctx.strokeStyle = 'rgba(0, 0, 0, 0.2)';
+                ctx.lineWidth = 1;
+                ctx.setLineDash([4, 4]);
+                ctx.beginPath();
+                ctx.moveTo(tcx, 5);
+                ctx.lineTo(tcx, h - 25);
+                ctx.stroke();
+                ctx.setLineDash([]);
+            }
+
+            // Axis labels
+            ctx.fillStyle = '#999';
+            ctx.font = '10px Inter, sans-serif';
+            ctx.textAlign = 'center';
+            ctx.fillText('t=0', tToCanvas(0), h - 8);
+            ctx.fillText('t=1', tToCanvas(1), h - 8);
+
+            // Hover indicator
+            if (hoverPos) {
+                ctx.beginPath();
+                ctx.arc(hoverPos.cx, hoverPos.cy, 5, 0, 2 * Math.PI);
+                ctx.fillStyle = '#fff';
+                ctx.fill();
+                ctx.strokeStyle = '#333';
+                ctx.lineWidth = 1.5;
+                ctx.stroke();
+            }
+            
+            // Draw side densities
+            drawLeftDensity();
+            drawRightDensity();
+            
+            // Draw bottom density at appropriate time, with marker at hover x
+            drawBottomDensity(displayTime, hoverX);
+        }
+
+        function updateHover(canvasX, canvasY) {
+            const t = canvasToT(canvasX);
+            const x = canvasToX(canvasY);
+            
+            if (t < 0 || t > 1 || x < xRange[0] || x > xRange[1]) {
+                document.getElementById('hoverPanel').classList.remove('active');
+                hoverPos = null;
+                hoverTime = null;
+                hoverX = null;
+                draw();
+                return;
+            }
+            
+            hoverPos = { cx: canvasX, cy: canvasY };
+            hoverTime = t;
+            hoverX = x;
+            
+            document.getElementById('hoverPanel').classList.add('active');
+            document.getElementById('hoverX').textContent = x.toFixed(2);
+            document.getElementById('hoverT').textContent = t.toFixed(2);
+            document.getElementById('hoverDensity').textContent = gmm.marginalDensity(x, t).toFixed(3);
+            
+            const resp = gmm.responsibility(x, t);
+            const respBars = document.getElementById('respBars');
+            respBars.innerHTML = '';
+            
+            resp.forEach((r, k) => {
+                respBars.innerHTML += `
+                    <div class="resp-bar">
+                        <div class="resp-bar-header">
+                            <span class="label">
+                                <span class="mode-dot" style="background: ${modeColors[k]};"></span>
+                                k=${k+1}
+                            </span>
+                            <span class="val">${(r * 100).toFixed(1)}%</span>
+                        </div>
+                        <div class="resp-bar-track">
+                            <div class="resp-bar-fill" style="width: ${r * 100}%; background: ${modeColors[k]};"></div>
+                        </div>
+                    </div>
+                `;
+            });
+            
+            draw();
+        }
+
+        function updateModeConfigs() {
+            const container = document.getElementById('modeConfigs');
+            container.innerHTML = '';
+            
+            gmmModes.forEach((mode, k) => {
+                container.innerHTML += `
+                    <div class="mode-row">
+                        <span class="label">
+                            <span class="mode-dot" style="background: ${modeColors[k]};"></span>
+                            Mode ${k + 1}
+                        </span>
+                        <span class="param-label">π</span>
+                        <input type="number" step="0.05" min="0.05" max="1" value="${mode.pi.toFixed(2)}" onchange="updateMode(${k}, 'pi', this.value)">
+                        <span class="param-label">μ</span>
+                        <input type="number" step="0.5" value="${mode.mu.toFixed(1)}" onchange="updateMode(${k}, 'mu', this.value)">
+                        <span class="param-label">σ²</span>
+                        <input type="number" step="0.05" min="0.1" value="${mode.sigma2.toFixed(2)}" onchange="updateMode(${k}, 'sigma2', this.value)">
+                    </div>
+                `;
+            });
+        }
+
+        function updateMode(k, prop, value) {
+            gmmModes[k][prop] = parseFloat(value);
+            gmm = new GMMOracle(gmmModes);
+            draw();
+        }
+
+        // Events
+        canvas.addEventListener('mousemove', (e) => {
+            const rect = canvas.getBoundingClientRect();
+            updateHover(e.clientX - rect.left, e.clientY - rect.top);
+        });
+
+        canvas.addEventListener('mouseleave', () => {
+            document.getElementById('hoverPanel').classList.remove('active');
+            hoverPos = null;
+            hoverTime = null;
+            hoverX = null;
+            draw();
+        });
+
+        document.getElementById('timeSlider').addEventListener('input', (e) => {
+            currentTime = parseFloat(e.target.value);
+            document.getElementById('timeValue').textContent = currentTime.toFixed(2);
+            if (!isPlaying && hoverTime === null) {
+                draw();
+            }
+        });
+
+        document.getElementById('flowLinesSlider').addEventListener('input', (e) => {
+            numFlowLines = parseInt(e.target.value);
+            draw();
+        });
+
+        document.getElementById('playBtn').addEventListener('click', () => {
+            if (isPlaying) {
+                isPlaying = false;
+                document.getElementById('playBtn').textContent = '▶ Play';
+                cancelAnimationFrame(animationId);
+            } else {
+                isPlaying = true;
+                document.getElementById('playBtn').textContent = '⏸ Pause';
+                animate();
+            }
+        });
+
+        document.getElementById('resetBtn').addEventListener('click', () => {
+            currentTime = 0;
+            document.getElementById('timeSlider').value = 0;
+            document.getElementById('timeValue').textContent = '0.00';
+            if (!isPlaying) draw();
+        });
+
+        function animate() {
+            if (!isPlaying) return;
+            currentTime += 0.006;
+            if (currentTime > 1) currentTime = 0;
+            document.getElementById('timeSlider').value = currentTime;
+            document.getElementById('timeValue').textContent = currentTime.toFixed(2);
+            draw();
+            animationId = requestAnimationFrame(animate);
+        }
+
+        // Render math when KaTeX is ready
+        function renderMath() {
+            try {
+                katex.render('p_t(x_t)', document.getElementById('inline-pt'), { throwOnError: false });
+                katex.render('p(k|x_t)', document.getElementById('inline-resp'), { throwOnError: false });
+                katex.render(
+                    'p_t(x_t) = \\sum_{k=1}^K \\pi_k \\, \\mathcal{N}(x_t;\\, \\alpha_t \\mu_k,\\, C_{t,k}), \\quad C_{t,k} = \\alpha_t^2 \\Lambda_k + \\sigma_t^2',
+                    document.getElementById('math-marginal'),
+                    { displayMode: true, throwOnError: false }
+                );
+                katex.render(
+                    'p(k \\mid x_t) = \\frac{\\pi_k \\, \\mathcal{N}(x_t;\\, \\alpha_t\\mu_k,\\, C_{t,k})}{\\sum_j \\pi_j \\, \\mathcal{N}(x_t;\\, \\alpha_t\\mu_j,\\, C_{t,j})}',
+                    document.getElementById('math-responsibility'),
+                    { displayMode: true, throwOnError: false }
+                );
+                katex.render(
+                    '\\frac{dx}{dt} = f(x,t) - \\frac{1}{2}g(t)^2 \\nabla_x \\log p_t(x)',
+                    document.getElementById('math-flow'),
+                    { displayMode: true, throwOnError: false }
+                );
+            } catch (e) {
+                console.log('KaTeX render error:', e);
+            }
+        }
+
+        // Init
+        window.addEventListener('resize', () => { resizeAll(); draw(); });
+        
+        window.addEventListener('load', () => {
+            resizeAll();
+            updateModeConfigs();
+            draw();
+            renderMath();
+        });
+    </script>
+</body>
+</html>
