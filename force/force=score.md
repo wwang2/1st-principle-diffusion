@@ -4,7 +4,56 @@ The marginal score $\nabla_{x_t} \log p_t(x_t)$ can be expressed entirely in ter
 
 ---
 
-## Setup
+## TL;DR: Score = Expected Force
+
+Forward diffusion: $x_t = \alpha_t x_0 + \sigma_t \varepsilon$, where $\varepsilon \sim \mathcal{N}(0, I)$
+
+### The Derivation (3 lines!)
+
+**1** Marginal score is a posterior expectation
+$$\nabla_{x_t} \log p_t(x_t) = \mathbb{E}_{p(x_0|x_t)}\left[\nabla_{x_t} \log q(x_t|x_0)\right]$$
+
+**2** For Gaussian kernel, gradients are related by a simple scaling
+$$\nabla_{x_t} \log q(x_t|x_0) = -\frac{1}{\alpha_t}\left(\nabla_{x_0} \log q(x_t|x_0)\right)$$
+
+**3** Apply Bayes rule + score identity ($\mathbb{E}_p[\nabla \log p] = 0$)
+$$= -\frac{1}{\alpha_t}\mathbb{E}_{p(x_0|x_t)}\left[\underbrace{\nabla_{x_0}\log p(x_0|x_t)}_{=0\text{ by score identity}} - \nabla_{x_0}\log p_0(x_0)\right]$$
+
+### Main Result
+
+$$\boxed{\nabla_{x_t} \log p_t(x_t) = \frac{1}{\alpha_t} \mathbb{E}_{p(x_0 \mid x_t)}\left[ \nabla_{x_0} \log p_0(x_0) \right]}$$
+
+> **The marginal score at any noise level = posterior-expected data score, scaled by $1/\alpha_t$**
+
+### Physics Connection
+
+If data follows Boltzmann: $p_0(x) \propto \exp(-U(x))$
+
+Then the data score **is** the physical force: $\nabla_x \log p_0(x) = -\nabla U(x) = \mathbf{F}(x)$
+
+$$\boxed{\text{Score} = \frac{1}{\alpha_t}\mathbb{E}_{p(x_0|x_t)}[\mathbf{F}(x_0)] = \text{Expected Force}}$$
+
+### Two Equivalent Training Objectives
+
+| Method | Loss | Target |
+|--------|------|--------|
+| **DSM** (noise) | $\mathbb{E}\left[\|s_\theta - (-\varepsilon/\sigma_t)\|^2\right]$ | Predict the noise |
+| **Force** | $\mathbb{E}\left[\|s_\theta - \mathbf{F}(x_0)/\alpha_t\|^2\right]$ | Predict the force |
+
+Both have the **same optimal solution**: $s^*(x_t, t) = \nabla_{x_t}\log p_t(x_t)$
+
+---
+
+### Why This Matters
+
+1. **Simplicity**: The derivation is just 3 lines of algebra
+2. **Physical intuition**: Score = force gives immediate intuition from physics
+3. **Alternative training**: Can train with forces if you have a potential $U(x)$
+4. **Unifies perspectives**: DSM and force matching are two sides of the same coin
+
+---
+
+## Detailed steup
 
 - Forward kernel: $q(x_t \mid x_0) = \mathcal{N}(x_t; \alpha_t x_0, \sigma_t^2 I)$
 - Data distribution: $p_0(x_0)$
