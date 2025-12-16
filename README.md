@@ -2,7 +2,7 @@
 
 A first-principles introduction to transport, diffusion, and flow-based generative models—covering foundational ideas rarely found elsewhere (unless you propmt an LLM correctly).
 
-It also aims to present the historical development of these concepts with greater accuracy, though I am trying my best and make no guarantee of being perfectly comprehensive or error-free.
+It also aims to present the historical development of these concepts, though I am trying my best and make no guarantee of covering all relevant references.
 
 The notes consist of the following sections 
 
@@ -11,6 +11,7 @@ The notes consist of the following sections
     \oracle
     \force 
     \manifold
+    \monge
     \reversibility
 ```
 
@@ -28,5 +29,5 @@ learning using nonequilibrium thermodynamics](https://arxiv.org/abs/1503.03585)
 ](https://arxiv.org/abs/2006.00702)
 - [Jarzynski, Targeted free energy perturbation
 ](https://arxiv.org/abs/cond-mat/0109461)
-
-
+- [Vargas,, Padhy, Blessing, Nüsken, 2024, Transport meets Variational Inference: Controlled Monte Carlo Diffusions
+](https://openreview.net/forum?id=PP1rudnxiW)
