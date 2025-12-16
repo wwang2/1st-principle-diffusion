@@ -1,5 +1,30 @@
 ## Oracle: Gaussian mixture prior under linear-Gaussian forward kernel
 
+---
+
+### Fundamental Bayes rule
+
+The central object of interest is the **posterior** \(p(\mathbf x_0 \mid \mathbf x_t)\), which tells us what we can infer about the clean data \(\mathbf x_0\) given a noisy observation \(\mathbf x_t\). By Bayes' rule:
+
+```math
+\boxed{
+p(\mathbf x_0 \mid \mathbf x_t) 
+= \frac{q(\mathbf x_t \mid \mathbf x_0)\, p_0(\mathbf x_0)}{\displaystyle\int q(\mathbf x_t \mid \mathbf x_0)\, p_0(\mathbf x_0)\, d\mathbf x_0}
+= \frac{q(\mathbf x_t \mid \mathbf x_0)\, p_0(\mathbf x_0)}{p_t(\mathbf x_t)}
+}
+```
+
+where:
+- \(q(\mathbf x_t \mid \mathbf x_0)\) is the **forward diffusion kernel** (how noise corrupts clean data)
+- \(p_0(\mathbf x_0)\) is the **data prior** (distribution of clean data)
+- \(p_t(\mathbf x_t) = \int q(\mathbf x_t \mid \mathbf x_0)\, p_0(\mathbf x_0)\, d\mathbf x_0\) is the **marginal** at time \(t\)
+
+The posterior is generally intractable for complex priors, but becomes **analytically computable** when both the forward kernel and prior have special structure—specifically, when both are Gaussian (or mixtures thereof).
+
+---
+
+### Setup
+
 Assume the (possibly anisotropic / correlated) linear-Gaussian diffusion kernel
 
 ```math
