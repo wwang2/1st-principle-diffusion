@@ -146,11 +146,39 @@ Since \(\varepsilon=\mathbf x_t-\alpha_t\mathbf x_0\), the conditional mean nois
 
 ---
 
-### (Optional) Oracle score
+### Oracle score
 
 Target: `∇_{x_t} log p_t(x_t)`
 
-Because \(p_t\) is a GMM with component covariances \(C_{t,k}\),
+#### Key identity: Marginal score as posterior expectation
+
+The marginal score can always be written as a **posterior expectation** of the conditional score:
+
+```math
+\boxed{
+\nabla_{\mathbf x_t} \log p_t(\mathbf x_t) = \mathbb{E}_{p(\mathbf x_0|\mathbf x_t)}\left[\nabla_{\mathbf x_t} \log q(\mathbf x_t|\mathbf x_0)\right]
+}
+```
+
+This follows directly from:
+```math
+\nabla_{\mathbf x_t} \log p_t(\mathbf x_t) 
+= \frac{\nabla_{\mathbf x_t} p_t(\mathbf x_t)}{p_t(\mathbf x_t)}
+= \frac{\int \nabla_{\mathbf x_t} q(\mathbf x_t|\mathbf x_0)\, p_0(\mathbf x_0)\, d\mathbf x_0}{p_t(\mathbf x_t)}
+= \int \nabla_{\mathbf x_t} \log q(\mathbf x_t|\mathbf x_0)\, p(\mathbf x_0|\mathbf x_t)\, d\mathbf x_0
+```
+
+This identity is fundamental—it connects the **marginal score** (what diffusion models learn) to the **conditional score** (which has a simple closed form for Gaussian kernels). See [force=score.md](../force/force=score.md) for the derivation showing this equals the expected data-space force.
+
+#### Explicit formula for GMM
+
+For the Gaussian kernel, the conditional score is:
+```math
+\nabla_{\mathbf x_t}\log q(\mathbf x_t|\mathbf x_0)
+= -(\sigma_t^2\Sigma)^{-1}(\mathbf x_t - \alpha_t\mathbf x_0)
+```
+
+Since \(p_t\) is a GMM with component covariances \(C_{t,k}=\alpha_t^2\Lambda_k+\sigma_t^2\Sigma\), we can also compute directly:
 
 ```math
 \nabla_{\mathbf x_t}\log \mathcal N(\mathbf x_t;\alpha_t\mu_k,C_{t,k})
