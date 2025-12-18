@@ -10,52 +10,62 @@
 - Score: $s_t(\mathbf{x})=\nabla_{\mathbf{x}}\log p_t(\mathbf{x})$
 - Denoiser: $\hat{\mathbf{x}}_\theta(\mathbf{x}_t,t)\approx\mathbb E[\mathbf{x}_0\mid \mathbf{x}_t]$
 
-### Forward diffusion (kernel + marginal)
-Forward kernel:
+### Forward diffusion
+**Kernel:** $q(\mathbf{x}_t\mid \mathbf{x}_0)=\mathcal N\big(\alpha_t \mathbf{x}_0,\,\sigma_t^2\Sigma\big)$, i.e. $\mathbf{x}_t = \alpha_t \mathbf{x}_0 + \sigma_t \mathbf{R} z$ with $z\sim\mathcal N(0,\mathbf{I})$
+
+**Marginal:** $p_t(\mathbf{x}_t)=\int q(\mathbf{x}_t\mid \mathbf{x}_0)\,p_0(\mathbf{x}_0)\,d\mathbf{x}_0$
+
+### Forward SDE (OU process)
+```math
+d\mathbf{x} = h_t\,\mathbf{x}\,dt + g_t\,\mathbf{R}\,d\mathbf{w}, \quad h_t=\frac{d}{dt}\log\alpha_t, \quad g_t=\sqrt{-\sigma_t^2\,\frac{d}{dt}\log\mathrm{SNR}_t}
+```
+(VP case: $d\mathbf{x}=-\tfrac12\beta_t \mathbf{x}\,dt+\sqrt{\beta_t}\,\mathbf{R}\,d\mathbf{w}$)
+
+### Reverse SDE (sampling, $p_1\to p_0$)
+```math
+d\mathbf{x} = \big(h_t \mathbf{x} - g_t^2\,\Sigma\, \nabla_{\mathbf{x}}\log p_t(\mathbf{x})\big)\,dt + g_t\,\mathbf{R}\,d\bar{\mathbf{w}}
+```
+**Denoiser→score:** $s_t(\mathbf{x})=(\sigma_t^2\Sigma)^{-1}\big(\alpha_t\,\hat{\mathbf{x}}_\theta(\mathbf{x},t)-\mathbf{x}\big)$
+
+---
+
+### Training Target: Denoising Score Matching
+
+> **The core training objective:** Learn to predict the score $\nabla_{\mathbf{x}} \log p_t(\mathbf{x})$ at each noise level $t$.
+
+#### Ground-truth score for the forward kernel
+
+Given the forward kernel $q(\mathbf{x}_t \mid \mathbf{x}_0) = \mathcal{N}(\mathbf{x}_t; \alpha_t \mathbf{x}_0, \sigma_t^2 \Sigma)$, the conditional score is:
 
 ```math
-q(\mathbf{x}_t\mid \mathbf{x}_0)=\mathcal N\big(\mathbf{x}_t;\,\alpha_t \mathbf{x}_0,\,\sigma_t^2\Sigma\big)
+\nabla_{\mathbf{x}_t} \log q(\mathbf{x}_t \mid \mathbf{x}_0) = -(\sigma_t^2 \Sigma)^{-1}(\mathbf{x}_t - \alpha_t \mathbf{x}_0) = -\frac{\Sigma^{-1} \mathbf{R} z}{\sigma_t}
 ```
 
-Sampling form:
+where $z \sim \mathcal{N}(0, \mathbf{I})$ is the noise used to construct $\mathbf{x}_t = \alpha_t \mathbf{x}_0 + \sigma_t \mathbf{R} z$.
+
+#### Denoising score matching loss
+
+The training objective minimizes the expected squared error between the model's predicted score and the ground-truth conditional score:
 
 ```math
-\mathbf{x}_t = \alpha_t \mathbf{x}_0 + \sigma_t \mathbf{R} z,\qquad z\sim\mathcal N(0,\mathbf{I})
+\boxed{\mathcal{L}_{\text{DSM}} = \mathbb{E}_{t \sim \mathcal{U}[0,1],\, \mathbf{x}_0 \sim p_0,\, z \sim \mathcal{N}(0,\mathbf{I})} \left[ \lambda(t) \left\| \mathbf{s}_\theta(\mathbf{x}_t, t) - \nabla_{\mathbf{x}_t} \log q(\mathbf{x}_t \mid \mathbf{x}_0) \right\|^2 \right]}
 ```
 
-Noise-convolved marginal:
+where $\lambda(t)$ is a time-dependent weighting function.
 
-```math
-p_t(\mathbf{x}_t)=\int q(\mathbf{x}_t\mid \mathbf{x}_0)\,p_0(\mathbf{x}_0)\,d\mathbf{x}_0
-```
+#### Equivalent parameterizations
 
-### Forward SDE (Ornstein Uhlenbeck)
-A linear SDE that yields the same Gaussian kernels:
+The network can equivalently predict different quantities, all related by simple transformations:
 
-```math
-d\mathbf{x} = h_t\,\mathbf{x}\,dt + g_t\,\mathbf{R}\,d\mathbf{w}
-```
+| **Parameterization** | **Network output** | **Loss (simplified)** | **Score recovery** |
+|---------------------|-------------------|----------------------|-------------------|
+| **Score** | $\mathbf{s}_\theta(\mathbf{x}_t, t) \approx \nabla \log p_t$ | $\|\mathbf{s}_\theta - \nabla \log q(\mathbf{x}_t \mid \mathbf{x}_0)\|^2$ | Direct |
+| **Noise ($\epsilon$)** | $\boldsymbol{\epsilon}_\theta(\mathbf{x}_t, t) \approx z$ | $\|\boldsymbol{\epsilon}_\theta - z\|^2$ | $\mathbf{s} = -\frac{\Sigma^{-1}\mathbf{R}\boldsymbol{\epsilon}_\theta}{\sigma_t}$ |
+| **Denoiser ($\hat{\mathbf{x}}_0$)** | $\hat{\mathbf{x}}_\theta(\mathbf{x}_t, t) \approx \mathbb{E}[\mathbf{x}_0 \mid \mathbf{x}_t]$ | $\|\hat{\mathbf{x}}_\theta - \mathbf{x}_0\|^2$ | $\mathbf{s} = \frac{(\sigma_t^2\Sigma)^{-1}(\alpha_t \hat{\mathbf{x}}_\theta - \mathbf{x}_t)}{1}$ |
 
-with
+> **Why this works:** By the **denoising score matching theorem** (Vincent 2011), minimizing the denoising objective $\mathbb{E}[\|\mathbf{s}_\theta - \nabla \log q(\mathbf{x}_t \mid \mathbf{x}_0)\|^2]$ is equivalent to minimizing $\mathbb{E}[\|\mathbf{s}_\theta - \nabla \log p_t\|^2]$ up to a constant. The conditional score serves as an unbiased estimator of the marginal score gradient direction.
 
-```math
-h_t=\frac{d}{dt}\log\alpha_t,\qquad \mathrm{SNR}_t=\frac{\alpha_t^2}{\sigma_t^2},\qquad g_t=\sqrt{-\sigma_t^2\,\frac{d}{dt}\log\mathrm{SNR}_t}
-```
-
-(VP special case: $d\mathbf{x}=-\tfrac12\beta_t \mathbf{x}\,dt+\sqrt{\beta_t}\,\mathbf{R}\,d\mathbf{w}$.)
-
-### Reverse-time SDE (sampling)
-Reverse SDE (maps $p_1\to p_0$):
-
-```math
-d\mathbf{x} = \big(h_t \mathbf{x} - g_t^2\,\mathbf{R} \mathbf{R}^{\intercal}\, \nabla_{\mathbf{x}}\log p(\mathbf{x})\big)\,dt + g_t\,\mathbf{R}\,d\bar{\mathbf{w}}
-```
-
-Denoiser-to-score identity (common parameterization):
-
-```math
-s_t(\mathbf{x})=(\sigma_t^2\Sigma)^{-1}\big(\alpha_t\,\hat{\mathbf{x}}_\theta(\mathbf{x},t)-\mathbf{x}\big)
-```
+---
 
 ### Fokker-Planck equation (density evolution)
 
@@ -266,3 +276,78 @@ This is a **continuity equation** (no diffusion term!), corresponding to the ODE
 | **Use case** | Training (add noise) | Sampling | Sampling + likelihood |
 
 **Intuition:** The reverse SDE and ODE both use the score to "undo" the forward diffusion. The SDE adds noise then corrects with $g^2 \Sigma s_t$; the ODE uses half the correction ($\frac{g^2}{2} \Sigma s_t$) with no noise, achieving the same marginal evolution deterministically.
+
+---
+
+### Extended Solution Space: Equilibration Factor
+
+**Key insight:** The reverse SDE and probability flow ODE are not the only processes that preserve the marginals $p_t$. There exists an **infinite family of SDEs** parameterized by an equilibration factor $\psi(t) \geq 0$.
+
+#### General form
+
+```math
+d\mathbf{x} = \left(h_t \mathbf{x} - \left(g_t^2 + \tfrac{1}{2}\psi(t)^2\right) \mathbf{R}\mathbf{R}^{\intercal}\, \nabla_{\mathbf{x}} \log p_t(\mathbf{x}) \right) dt + \psi(t)\,\mathbf{R}\, d\bar{\mathbf{w}}
+```
+
+
+#### Why this preserves marginals
+
+The Fokker-Planck equation for a general SDE $d\mathbf{x} = \mathbf{f}\, dt + \sigma\, d\mathbf{w}$ is:
+
+```math
+\frac{\partial p}{\partial t} = -\nabla \cdot (\mathbf{f} \, p) + \frac{\sigma^2}{2} \nabla \cdot (\Sigma \nabla p)
+```
+
+For the extended SDE with drift $\mathbf{f} = h_t \mathbf{x} - (g_t^2 + \tfrac{1}{2}\psi^2) \Sigma s_t$ and diffusion coefficient $\sigma = \psi$:
+
+```math
+\frac{\partial p}{\partial t} = -\nabla \cdot \left(\left(h_t \mathbf{x} - \left(g_t^2 + \tfrac{1}{2}\psi^2\right) \Sigma s_t\right) p\right) + \frac{\psi^2}{2} \nabla \cdot (\Sigma \nabla p)
+```
+
+Using $\nabla \cdot (\Sigma \nabla p) = \nabla \cdot (p \, \Sigma \nabla \log p) = \nabla \cdot (p \, \Sigma \, s_t)$:
+
+```math
+= -\nabla \cdot (h_t \mathbf{x} \, p) + \left(g_t^2 + \tfrac{1}{2}\psi^2\right) \nabla \cdot (\Sigma s_t \, p) - \frac{\psi^2}{2} \nabla \cdot (\Sigma s_t \, p)
+```
+
+The $\tfrac{1}{2}\psi^2$ terms cancel:
+
+```math
+= -\nabla \cdot (h_t \mathbf{x} \, p) + g_t^2 \nabla \cdot (\Sigma s_t \, p)
+```
+
+Rewriting the second term back:
+
+```math
+= -\nabla \cdot (h_t \mathbf{x} \, p) + \frac{g_t^2}{2} \nabla \cdot (\Sigma \nabla p) + \frac{g_t^2}{2} \nabla \cdot (\Sigma \nabla p)
+```
+
+This recovers **exactly the same FPE** as the reverse-time process! The equilibration factor $\psi(t)$ adds extra noise that is immediately corrected by the enhanced score term (the $\tfrac{1}{2}\psi^2$ contribution), leaving the marginal evolution unchanged.
+
+#### Special cases
+
+| $\psi(t)$ | **Resulting process** |
+|-----------|----------------------|
+| $\psi = 0$ | Standard reverse SDE (no extra equilibration) |
+| $\psi = g_t$ | Matched equilibration (diffusion doubled in variance) |
+| $\psi = \sqrt{2} g_t$ | Tripled effective diffusion variance |
+| $\psi \gg g_t$ | Langevin-dominated dynamics (strong equilibration) |
+
+#### Interpretation
+
+- **Extra stochasticity:** $\psi(t)$ injects additional noise beyond the minimum required for time reversal
+- **Equilibration:** Higher $\psi$ means faster local mixing around the current density—useful when the score estimate is noisy or when exploring multimodal distributions
+- **Half-factor:** The $\tfrac{1}{2}$ in front of $\psi^2$ arises from the FPE diffusion term structure, ensuring exact cancellation
+- **Trade-off:** More noise ($\psi > 0$) can improve robustness but may require smaller step sizes for stability
+
+#### Practical use
+
+In practice, $\psi(t)$ can be:
+1. **Constant multiple:** $\psi(t) = c \cdot g_t$ for some $c \geq 0$
+2. **Scheduled:** Larger early (exploration) → smaller late (refinement)
+3. **Adaptive:** Tuned based on score uncertainty or sample quality metrics
+
+This extended family unifies:
+- **Deterministic sampling** (ODE): Take the $\psi = 0$ limit and halve the score coefficient
+- **Standard stochastic sampling** (reverse SDE): $\psi = 0$
+- **Enhanced stochastic sampling:** $\psi > 0$ for better mixing and exploration
