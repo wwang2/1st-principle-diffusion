@@ -10,6 +10,7 @@ import matplotlib.pyplot as plt
 from matplotlib.gridspec import GridSpec
 import matplotlib.ticker as mticker
 from matplotlib.collections import LineCollection
+from matplotlib.animation import FuncAnimation, PillowWriter
 
 torch.manual_seed(42)
 
@@ -94,19 +95,27 @@ def langevin_dynamics_with_trace(
     device: str = DEVICE,
     trace_batch: int = 128,
     trace_every: int = 50,
+    record_all_for_marginal: bool = False,
 ):
     """
     Same dynamics as `langevin_dynamics`, but records a small subset of particles
     over time so we can visualize the integration → projection story.
+    
+    Args:
+        record_all_for_marginal: If True, also record ALL samples (X_all) at each
+            trace step for computing accurate marginal densities. The traced subset
+            (X_unc, X) is still recorded for trajectory visualization.
     """
     X_unc_t = torch.randn([num_batch, 2], device=device)
     trace_ix = torch.randperm(num_batch, device=device)[: min(trace_batch, num_batch)]
 
     trace = {
         "t": [],
-        "X_unc": [],  # list[Tensor(trace_batch, 2)] on CPU
-        "X": [],      # list[Tensor(trace_batch, 2)] on CPU
+        "X_unc": [],  # list[Tensor(trace_batch, 2)] on CPU - for trajectory viz
+        "X": [],      # list[Tensor(trace_batch, 2)] on CPU - for trajectory viz
     }
+    if record_all_for_marginal:
+        trace["X_all"] = []  # list[Tensor(num_batch, 2)] on CPU - for marginal
 
     def _record(t: int):
         u = X_unc_t[trace_ix].detach().cpu()
@@ -114,6 +123,9 @@ def langevin_dynamics_with_trace(
         trace["t"].append(int(t))
         trace["X_unc"].append(u)
         trace["X"].append(x)
+        if record_all_for_marginal:
+            x_all = X_unc_t if conditioner is None else conditioner(X_unc_t)
+            trace["X_all"].append(x_all.detach().cpu())
 
     _record(0)
     for t in range(1, num_steps + 1):
@@ -929,6 +941,231 @@ def plot_triptych(
     print(f"Saved figure to {out_path}")
     return out_path
 
+def create_trajectory_gif(
+    *,
+    distribution,
+    conditioner,
+    trace: dict,
+    out_name: str,
+    out_dir: Path | None = None,
+    lim: float = 5.0,
+    N: int = 150,
+    manifold_kind: str | None = None,  # "circle", "line", "disk", "star"
+    circle_r: float = 1.0,
+    disk_r: float = 2.0,
+    star_params: dict | None = None,  # {"R": 2.0, "n_points": 5, "amplitude": 0.35}
+    marginal_kind: str = "theta",  # "theta" or "x1"
+    ref_curve: tuple[np.ndarray, np.ndarray] | None = None,
+    fps: int = 8,
+    dpi: int = 150,
+    trail_length: int = 5,  # Number of past frames to show as trail
+    display_particles: int = 32,  # Number of particles to show in trajectory panels
+) -> Path:
+    """
+    Create an animated GIF showing trajectory evolution in three panels:
+      1. Unconstrained space (u-space) - selected particle trajectories
+      2. Constrained space (x-space) - selected projected samples on density background
+      3. Marginal density evolution over time (using ALL samples if available)
+    
+    Args:
+        distribution: Target distribution for density background
+        conditioner: Projection function u -> x
+        trace: Dictionary from langevin_dynamics_with_trace containing 't', 'X_unc', 'X',
+               and optionally 'X_all' for full samples (used for marginal)
+        out_name: Output filename (should end in .gif)
+        out_dir: Output directory (defaults to temp_scripts)
+        lim: Axis limits for plotting
+        N: Grid resolution for density background
+        manifold_kind: Type of manifold ("circle", "line", "disk", "star")
+        circle_r: Radius for circle manifold
+        disk_r: Radius for disk manifold
+        star_params: Parameters for star manifold
+        marginal_kind: Type of marginal ("theta" for angular, "x1" for first coordinate)
+        ref_curve: Reference curve for marginal (grid, pdf) tuple
+        fps: Frames per second for GIF
+        dpi: Resolution for GIF
+        trail_length: Number of past positions to show as fading trail
+        display_particles: Number of particles to display in trajectory panels
+    
+    Returns:
+        Path to saved GIF
+    """
+    out_dir = default_out_dir() if out_dir is None else out_dir
+    
+    # Background density grid
+    x = np.linspace(-lim, lim, N)
+    Xg, Yg = np.meshgrid(x, x)
+    XY = torch.tensor(np.stack([Xg.ravel(), Yg.ravel()], axis=1), dtype=torch.float32, device=DEVICE)
+    P_grid = torch.exp(distribution.log_prob(XY)).reshape(N, N).detach().cpu().numpy()
+    
+    # Extract trace data for trajectory visualization (subset)
+    U_trace = np.stack([u.numpy() for u in trace["X_unc"]], axis=0)  # (Trec, trace_batch, 2)
+    X_trace = np.stack([x.numpy() for x in trace["X"]], axis=0)  # (Trec, trace_batch, 2)
+    t_all = np.array(trace["t"])
+    Trec, B_trace, _ = U_trace.shape
+    
+    # Use X_all for marginal if available (more samples = smoother histogram)
+    has_all_samples = "X_all" in trace and len(trace["X_all"]) > 0
+    if has_all_samples:
+        X_marginal = np.stack([x.numpy() for x in trace["X_all"]], axis=0)  # (Trec, num_batch, 2)
+        n_marginal_samples = X_marginal.shape[1]
+        print(f"  Using {n_marginal_samples} samples for marginal density")
+    else:
+        X_marginal = X_trace  # Fall back to traced subset
+        n_marginal_samples = B_trace
+        print(f"  Using {n_marginal_samples} traced samples for marginal (no X_all available)")
+    
+    # Select particles to display (subset of traced particles)
+    n_display = min(display_particles, B_trace)
+    display_idx = np.linspace(0, B_trace - 1, n_display).astype(int)
+    U_display = U_trace[:, display_idx, :]  # (Trec, n_display, 2)
+    X_display = X_trace[:, display_idx, :]  # (Trec, n_display, 2)
+    
+    # Particle colors (consistent identity across frames)
+    id_cmap = plt.get_cmap("tab20")
+    id_colors = np.array([id_cmap((i % 20) / 20.0) for i in range(n_display)])
+    
+    # Set up figure
+    fig = plt.figure(figsize=(14, 4.5), dpi=dpi, constrained_layout=True)
+    gs = GridSpec(1, 3, figure=fig, width_ratios=[1.0, 1.0, 1.15])
+    ax_u = fig.add_subplot(gs[0, 0])
+    ax_x = fig.add_subplot(gs[0, 1])
+    ax_marg = fig.add_subplot(gs[0, 2])
+    
+    # Compute axis limits for u-space (use max across all frames)
+    u_lim = float(np.max(np.abs(U_trace)) * 1.1 + 1e-9)
+    
+    # Draw manifold boundary helper
+    def draw_manifold(ax, color='white', lw=1.2, alpha=0.9):
+        if manifold_kind == "circle":
+            th = np.linspace(-np.pi, np.pi, 400)
+            ax.plot(circle_r * np.cos(th), circle_r * np.sin(th), color=color, lw=lw, alpha=alpha)
+        elif manifold_kind == "line":
+            xx = np.linspace(-lim, lim, 200)
+            ax.plot(xx, -xx, color=color, lw=lw, alpha=alpha)
+        elif manifold_kind == "disk":
+            th = np.linspace(-np.pi, np.pi, 400)
+            ax.plot(disk_r * np.cos(th), disk_r * np.sin(th), color=color, lw=lw, alpha=alpha, ls='--')
+        elif manifold_kind == "star" and star_params is not None:
+            th = np.linspace(-np.pi, np.pi, 500)
+            R = star_params.get("R", 2.0)
+            n_pts = star_params.get("n_points", 5)
+            amp = star_params.get("amplitude", 0.35)
+            r_star = R * (1 + amp * np.cos(n_pts * th))
+            ax.plot(r_star * np.cos(th), r_star * np.sin(th), color=color, lw=lw, alpha=alpha, ls='--')
+    
+    # Marginal bins and reference
+    if marginal_kind == "theta":
+        bins = np.linspace(-np.pi, np.pi, 81)
+        centers = 0.5 * (bins[:-1] + bins[1:])
+    elif marginal_kind == "x1":
+        if ref_curve is not None:
+            grid_min, grid_max = ref_curve[0].min(), ref_curve[0].max()
+        else:
+            grid_min, grid_max = -lim, lim
+        bins = np.linspace(grid_min, grid_max, 81)
+        centers = 0.5 * (bins[:-1] + bins[1:])
+    
+    # Animation update function
+    def update(frame_idx):
+        ax_u.clear()
+        ax_x.clear()
+        ax_marg.clear()
+        
+        t = t_all[frame_idx]
+        U_t = U_display[frame_idx]  # (n_display, 2) - selected particles
+        X_t = X_display[frame_idx]  # (n_display, 2) - selected particles
+        X_t_marginal = X_marginal[frame_idx]  # (num_batch, 2) - all samples for marginal
+        
+        # --- Panel 1: Unconstrained space (u-space) ---
+        # Draw trails (past positions fading)
+        start_trail = max(0, frame_idx - trail_length)
+        for trail_i in range(start_trail, frame_idx):
+            alpha_trail = 0.15 + 0.3 * ((trail_i - start_trail) / max(1, frame_idx - start_trail))
+            U_trail = U_display[trail_i]
+            ax_u.scatter(U_trail[:, 0], U_trail[:, 1], s=8, c=id_colors, alpha=alpha_trail, linewidths=0.0)
+        
+        # Current positions
+        ax_u.scatter(U_t[:, 0], U_t[:, 1], s=35, c=id_colors, alpha=0.95, linewidths=0.5, edgecolors='black')
+        
+        ax_u.set_xlim(-u_lim, u_lim)
+        ax_u.set_ylim(-u_lim, u_lim)
+        ax_u.set_aspect('equal', adjustable='box')
+        ax_u.set_xlabel("u₁")
+        ax_u.set_ylabel("u₂")
+        ax_u.set_title(f"Unconstrained (u-space)  t={t}  [{n_display} particles]")
+        ax_u.grid(True, alpha=0.3)
+        
+        # --- Panel 2: Constrained space (x-space) ---
+        ax_x.contourf(Xg, Yg, P_grid, levels=32, cmap=plt.get_cmap("GnBu"), alpha=0.92)
+        draw_manifold(ax_x)
+        
+        # Draw trails in x-space too
+        for trail_i in range(start_trail, frame_idx):
+            alpha_trail = 0.15 + 0.3 * ((trail_i - start_trail) / max(1, frame_idx - start_trail))
+            X_trail = X_display[trail_i]
+            ax_x.scatter(X_trail[:, 0], X_trail[:, 1], s=8, c=id_colors, alpha=alpha_trail, linewidths=0.0)
+        
+        # Current positions
+        ax_x.scatter(X_t[:, 0], X_t[:, 1], s=35, c=id_colors, alpha=0.95, linewidths=0.5, edgecolors='white')
+        
+        ax_x.set_xlim(-lim, lim)
+        ax_x.set_ylim(-lim, lim)
+        ax_x.set_aspect('equal', adjustable='box')
+        ax_x.set_xlabel("x₁")
+        ax_x.set_ylabel("x₂")
+        ax_x.set_title(f"Constrained (x-space)  t={t}")
+        
+        # --- Panel 3: Marginal density (using ALL samples) ---
+        # Reference curve
+        if ref_curve is not None:
+            grid_ref, pdf_ref = ref_curve
+            ax_marg.fill_between(grid_ref, pdf_ref, alpha=0.15, color='0.2', label='reference')
+            ax_marg.plot(grid_ref, pdf_ref, color='0.2', lw=2.0, alpha=0.8)
+        
+        # Compute current marginal histogram from ALL samples
+        if marginal_kind == "theta":
+            vals = np.arctan2(X_t_marginal[:, 1], X_t_marginal[:, 0])
+            ax_marg.set_xlim(-np.pi, np.pi)
+            ax_marg.set_xlabel(r"$\theta$ (radians)")
+            ax_marg.xaxis.set_major_locator(mticker.FixedLocator([-np.pi, -np.pi/2, 0, np.pi/2, np.pi]))
+            ax_marg.set_xticklabels([r"$-\pi$", r"$-\frac{\pi}{2}$", "0", r"$\frac{\pi}{2}$", r"$\pi$"])
+        elif marginal_kind == "x1":
+            vals = X_t_marginal[:, 0]
+            ax_marg.set_xlim(bins[0], bins[-1])
+            ax_marg.set_xlabel("x₁")
+        
+        hist, _ = np.histogram(vals, bins=bins, density=True)
+        time_color = plt.get_cmap("viridis")(0.3 + 0.6 * (frame_idx / max(1, Trec - 1)))
+        ax_marg.bar(centers, hist, width=centers[1] - centers[0], alpha=0.65, color=time_color, edgecolor='none', label=f't={t}')
+        ax_marg.plot(centers, hist, color=time_color, lw=1.5, alpha=0.9)
+        
+        ax_marg.set_ylabel("density")
+        ax_marg.set_title(f"Marginal (n={n_marginal_samples})  t={t}")
+        ax_marg.legend(loc='upper right', fontsize=9)
+        ax_marg.grid(True, alpha=0.3, axis='y')
+        
+        # Auto-scale y-axis for marginal
+        if ref_curve is not None:
+            y_max = max(np.max(pdf_ref) * 1.15, np.max(hist) * 1.15)
+        else:
+            y_max = np.max(hist) * 1.15 if np.max(hist) > 0 else 1.0
+        ax_marg.set_ylim(0, y_max)
+        
+        return ax_u, ax_x, ax_marg
+    
+    # Create animation
+    anim = FuncAnimation(fig, update, frames=Trec, interval=1000 // fps, blit=False)
+    
+    # Save GIF
+    out_path = out_dir / out_name
+    writer = PillowWriter(fps=fps)
+    anim.save(out_path, writer=writer)
+    plt.close(fig)
+    print(f"Saved GIF to {out_path}")
+    return out_path
+
+
 def plot_integration_projection_layout(
     *,
     distribution,
@@ -1197,6 +1434,34 @@ if __name__ == "__main__":
         marginal_kind="x1",
         ref_curve=(x1_grid, pdf_x1),
     )
+    # Create trajectory GIF for linear projection (10x longer sampling)
+    print("Creating trajectory GIF for linear projection (10x longer)...")
+    GIF_STEPS_LINEAR = NUM_STEPS * 10  # 10x longer
+    GIF_TRACE_EVERY_LINEAR = TRACE_EVERY * 10  # Keep ~same number of frames
+    GIF_BATCH_LINEAR = NUM_BATCH * 2  # More samples for smoother marginal
+    _, _, trace_gif_linear = langevin_dynamics_with_trace(
+        gmm,
+        conditioner=linear_projec,
+        num_steps=GIF_STEPS_LINEAR,
+        num_batch=GIF_BATCH_LINEAR,
+        step_size=STEP_SIZE,
+        trace_batch=TRACE_BATCH,
+        trace_every=GIF_TRACE_EVERY_LINEAR,
+        record_all_for_marginal=True,  # Record all samples for smooth marginal
+    )
+    create_trajectory_gif(
+        distribution=gmm,
+        conditioner=linear_projec,
+        trace=trace_gif_linear,
+        out_name="linear_trajectory.gif",
+        out_dir=out_dir,
+        manifold_kind="line",
+        marginal_kind="x1",
+        ref_curve=(x1_grid, pdf_x1),
+        fps=6,
+        trail_length=4,
+        display_particles=32,
+    )
 
     # --- Run 2: map-to-circle projection + theta marginal ---
     X_samples_c, X_samples_unc_c = langevin_dynamics(
@@ -1274,6 +1539,35 @@ if __name__ == "__main__":
         circle_r=1.0,
         marginal_kind="theta",
         ref_curve=(theta_grid, pdf_theta),
+    )
+    # Create trajectory GIF for circle projection (10x longer sampling)
+    print("Creating trajectory GIF for circle projection (10x longer)...")
+    GIF_STEPS_CIRCLE = NUM_STEPS * 10  # 10x longer
+    GIF_TRACE_EVERY_CIRCLE = TRACE_EVERY * 10  # Keep ~same number of frames
+    GIF_BATCH_CIRCLE = NUM_BATCH * 2  # More samples for smoother marginal
+    _, _, trace_gif_circle = langevin_dynamics_with_trace(
+        gmm,
+        conditioner=map_to_unit_circle,
+        num_steps=GIF_STEPS_CIRCLE,
+        num_batch=GIF_BATCH_CIRCLE,
+        step_size=STEP_SIZE,
+        trace_batch=TRACE_BATCH,
+        trace_every=GIF_TRACE_EVERY_CIRCLE,
+        record_all_for_marginal=True,  # Record all samples for smooth marginal
+    )
+    create_trajectory_gif(
+        distribution=gmm,
+        conditioner=map_to_unit_circle,
+        trace=trace_gif_circle,
+        out_name="circle_trajectory.gif",
+        out_dir=out_dir,
+        manifold_kind="circle",
+        circle_r=1.0,
+        marginal_kind="theta",
+        ref_curve=(theta_grid, pdf_theta),
+        fps=6,
+        trail_length=4,
+        display_particles=32,
     )
 
     # --- Run 3: algebraic_disk bijection with volume correction ---
@@ -1461,6 +1755,47 @@ if __name__ == "__main__":
     plt.close(fig)
     print(f"Saved figure to {out_path}")
 
+    # Create trajectory GIF for disk sampling (unbiased version to show evolution)
+    # 10x longer sampling, proportionally larger trace_every to keep frame count manageable
+    print("Creating trajectory GIF for disk sampling (10x longer)...")
+    DISK_GIF_STEPS = DISK_STEPS * 10  # 10x longer (was min(DISK_STEPS, 2000))
+    DISK_GIF_BATCH = 20000  # Many samples for smooth marginal
+    DISK_GIF_TRACE_EVERY = 400  # 10x larger to keep ~same frame count
+    _, _, trace_disk = langevin_dynamics_with_trace(
+        gmm,
+        conditioner=disk_conditioner,
+        num_steps=DISK_GIF_STEPS,
+        num_batch=DISK_GIF_BATCH,
+        step_size=DISK_STEP_SIZE,
+        trace_batch=96,
+        trace_every=DISK_GIF_TRACE_EVERY,
+        record_all_for_marginal=True,  # Record all samples for smooth marginal
+    )
+    # Reference for disk: radial marginal at angle theta=0 (just use x1 marginal inside disk)
+    x1_disk_grid = np.linspace(-DISK_R * 0.99, DISK_R * 0.99, 512, dtype=np.float32)
+    # Approximate: sample along a horizontal line through disk center
+    line_disk = np.stack([x1_disk_grid, np.zeros_like(x1_disk_grid)], axis=1)
+    line_disk_t = torch.tensor(line_disk, device=DEVICE)
+    pdf_disk_unnorm = torch.exp(gmm.log_prob(line_disk_t)).detach().cpu().numpy()
+    Z_disk = np.trapz(pdf_disk_unnorm, x=x1_disk_grid)
+    pdf_disk_x1 = pdf_disk_unnorm / (Z_disk + 1e-12)
+    
+    create_trajectory_gif(
+        distribution=gmm,
+        conditioner=disk_conditioner,
+        trace=trace_disk,
+        out_name="disk_trajectory.gif",
+        out_dir=out_dir,
+        manifold_kind="disk",
+        disk_r=DISK_R,
+        marginal_kind="x1",
+        ref_curve=(x1_disk_grid, pdf_disk_x1),
+        fps=8,
+        trail_length=5,
+        lim=3.5,
+        display_particles=32,
+    )
+
     # --- Run 4: Star-shaped manifold with volume correction ---
     print("\n" + "=" * 60)
     print("Running star-shaped manifold demo with volume correction...")
@@ -1613,6 +1948,45 @@ if __name__ == "__main__":
     fig.savefig(out_path)
     plt.close(fig)
     print(f"Saved figure to {out_path}")
+
+    # Create trajectory GIF for star sampling (10x longer)
+    print("Creating trajectory GIF for star sampling (10x longer)...")
+    STAR_GIF_STEPS = STAR_STEPS * 10  # 10x longer (was min(STAR_STEPS, 2000))
+    STAR_GIF_BATCH = 20000  # Many samples for smooth marginal
+    STAR_GIF_TRACE_EVERY = 400  # 10x larger to keep ~same frame count
+    _, _, trace_star = langevin_dynamics_with_trace(
+        gmm,
+        conditioner=star_conditioner,
+        num_steps=STAR_GIF_STEPS,
+        num_batch=STAR_GIF_BATCH,
+        step_size=STAR_STEP_SIZE,
+        trace_batch=96,
+        trace_every=STAR_GIF_TRACE_EVERY,
+        record_all_for_marginal=True,  # Record all samples for smooth marginal
+    )
+    # Reference for star: similar to disk, use x1 marginal
+    x1_star_grid = np.linspace(-STAR_R * 1.3 * 0.99, STAR_R * 1.3 * 0.99, 512, dtype=np.float32)
+    line_star = np.stack([x1_star_grid, np.zeros_like(x1_star_grid)], axis=1)
+    line_star_t = torch.tensor(line_star, device=DEVICE)
+    pdf_star_unnorm = torch.exp(gmm.log_prob(line_star_t)).detach().cpu().numpy()
+    Z_star = np.trapz(pdf_star_unnorm, x=x1_star_grid)
+    pdf_star_x1 = pdf_star_unnorm / (Z_star + 1e-12)
+    
+    create_trajectory_gif(
+        distribution=gmm,
+        conditioner=star_conditioner,
+        trace=trace_star,
+        out_name="star_trajectory.gif",
+        out_dir=out_dir,
+        manifold_kind="star",
+        star_params={"R": STAR_R, "n_points": STAR_N_POINTS, "amplitude": STAR_AMPLITUDE},
+        marginal_kind="x1",
+        ref_curve=(x1_star_grid, pdf_star_x1),
+        fps=8,
+        trail_length=5,
+        lim=3.5,
+        display_particles=32,
+    )
 
     print("\n✓ All demos completed.")
     print(f"  Comparison plots saved to: {manifold_dir}")
