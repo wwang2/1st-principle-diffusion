@@ -1,10 +1,10 @@
-## Oracle: Gaussian mixture prior under linear-Gaussian forward kernel
+# Oracle: Gaussian Mixture Prior under Linear-Gaussian Forward Kernel
 
 ---
 
-### Fundamental Bayes rule
+## Bayes' Rule
 
-The central object of interest is the **posterior** \(p(\mathbf x_0 \mid \mathbf x_t)\), which tells us what we can infer about the clean data \(\mathbf x_0\) given a noisy observation \(\mathbf x_t\). By Bayes' rule:
+The central object of interest is the **posterior** $p(\mathbf x_0 \mid \mathbf x_t)$, which tells us what we can infer about the clean data $\mathbf x_0$ given a noisy observation $\mathbf x_t$. By Bayes' rule:
 
 ```math
 \boxed{
@@ -15,29 +15,29 @@ p(\mathbf x_0 \mid \mathbf x_t)
 ```
 
 where:
-- \(q(\mathbf x_t \mid \mathbf x_0)\) is the **forward diffusion kernel** (how noise corrupts clean data)
-- \(p_0(\mathbf x_0)\) is the **data prior** (distribution of clean data)
-- \(p_t(\mathbf x_t) = \int q(\mathbf x_t \mid \mathbf x_0)\, p_0(\mathbf x_0)\, d\mathbf x_0\) is the **marginal** at time \(t\)
+- $q(\mathbf x_t \mid \mathbf x_0)$ is the **forward diffusion kernel** (how noise corrupts clean data)
+- $p_0(\mathbf x_0)$ is the **data prior** (distribution of clean data)
+- $p_t(\mathbf x_t) = \int q(\mathbf x_t \mid \mathbf x_0)\, p_0(\mathbf x_0)\, d\mathbf x_0$ is the **marginal** at time $t$
 
 The posterior is generally intractable for complex priors, but becomes **analytically computable** when both the forward kernel and prior have special structure—specifically, when both are Gaussian (or mixtures thereof).
 
 ---
 
-### Setup
+## Setup
 
-Assume the (possibly anisotropic / correlated) linear-Gaussian diffusion kernel
+Assume the (possibly anisotropic / correlated) linear-Gaussian diffusion kernel:
 
 ```math
 q(\mathbf x_t\mid \mathbf x_0)=\mathcal N\!\big(\mathbf x_t;\,\alpha_t\,\mathbf x_0,\;\sigma_t^2\,\Sigma\big),\qquad \Sigma\succ 0,
 ```
 
-where \(\mathbf x_0,\mathbf x_t\in\mathbb R^D\) (e.g. flatten \(N\times d\to D\)). Equivalently,
+where $\mathbf x_0,\mathbf x_t\in\mathbb R^D$ (e.g. flatten $N\times d\to D$). Equivalently,
 
 ```math
 \mathbf x_t=\alpha_t\,\mathbf x_0+\varepsilon,\qquad \varepsilon\sim\mathcal N(0,\sigma_t^2\Sigma),\ \varepsilon\perp \mathbf x_0.
 ```
 
-Assume the data distribution is a \(K\)-component Gaussian mixture:
+Assume the data distribution is a $K$-component Gaussian mixture:
 
 ```math
 p_0(\mathbf x_0)=\sum_{k=1}^K \pi_k\,\mathcal N(\mathbf x_0;\,\mu_k,\Lambda_k),
@@ -46,9 +46,11 @@ p_0(\mathbf x_0)=\sum_{k=1}^K \pi_k\,\mathcal N(\mathbf x_0;\,\mu_k,\Lambda_k),
 
 ---
 
-### Key observation (forward marginal stays a GMM)
+## Marginal Distribution
 
-Conditioned on component \(k\), \(\mathbf x_0\mid k\sim\mathcal N(\mu_k,\Lambda_k)\). An affine transform of a Gaussian plus independent Gaussian noise is Gaussian, so
+**Key observation (forward marginal stays a GMM):**
+
+Conditioned on component $k$, $\mathbf x_0\mid k\sim\mathcal N(\mu_k,\Lambda_k)$. An affine transform of a Gaussian plus independent Gaussian noise is Gaussian, so:
 
 ```math
 \mathbf x_t\mid k\sim\mathcal N\!\Big(\alpha_t\mu_k,\ \alpha_t^2\Lambda_k+\sigma_t^2\Sigma\Big).
@@ -65,11 +67,11 @@ Therefore the marginal is analytic and remains a GMM:
 \qquad C_{t,k}:=\alpha_t^2\Lambda_k+\sigma_t^2\Sigma.
 ```
 
-So: mixture weights unchanged, means scaled by \(\alpha_t\), and covariances become “scaled + diffusion noise”.
+So: mixture weights unchanged, means scaled by $\alpha_t$, and covariances become “scaled + diffusion noise”.
 
 ---
 
-### Posterior responsibility
+## Posterior Responsibility
 
 Target: `p(k | x_t)`
 
@@ -84,18 +86,18 @@ By Bayes’ rule,
 
 ---
 
-### Component-conditional posterior
+## Component-Conditional Posterior
 
 Target: `p(x_0 | x_t, k)`
 
-For a fixed \(k\), this is a standard linear-Gaussian model:
+For a fixed $k$, this is a standard linear-Gaussian model:
 
 ```math
 \mathbf x_0\mid k\sim\mathcal N(\mu_k,\Lambda_k),\qquad
 \mathbf x_t\mid \mathbf x_0\sim\mathcal N(\alpha_t\mathbf x_0,\sigma_t^2\Sigma).
 ```
 
-Hence \(\mathbf x_0\mid \mathbf x_t,k\) is Gaussian:
+Hence $\mathbf x_0\mid \mathbf x_t,k$ is Gaussian:
 
 ```math
 \boxed{
@@ -115,7 +117,7 @@ with
 
 ---
 
-### Exact MMSE denoiser (oracle)
+## Exact MMSE Denoiser (Oracle)
 
 Target: `E[x_0 | x_t]`
 
@@ -125,7 +127,7 @@ The full posterior is a mixture of the component posteriors:
 p(\mathbf x_0\mid \mathbf x_t)=\sum_{k=1}^K r_{t,k}(\mathbf x_t)\,\mathcal N\!\big(\mathbf x_0;\ m_{t,k}(\mathbf x_t),\ V_{t,k}\big).
 ```
 
-Therefore the exact MMSE denoiser is
+Therefore the exact MMSE denoiser is:
 
 ```math
 \boxed{
@@ -134,7 +136,7 @@ Therefore the exact MMSE denoiser is
 }
 ```
 
-Since \(\varepsilon=\mathbf x_t-\alpha_t\mathbf x_0\), the conditional mean noise is
+Since $\varepsilon=\mathbf x_t-\alpha_t\mathbf x_0$, the conditional mean noise is:
 
 ```math
 \boxed{
@@ -146,11 +148,11 @@ Since \(\varepsilon=\mathbf x_t-\alpha_t\mathbf x_0\), the conditional mean nois
 
 ---
 
-### Oracle score
+## Oracle Score
 
 Target: `∇_{x_t} log p_t(x_t)`
 
-#### Key identity: Marginal score as posterior expectation
+### Key Identity: Marginal Score as Posterior Expectation
 
 The marginal score can always be written as a **posterior expectation** of the conditional score:
 
@@ -170,7 +172,7 @@ This follows directly from:
 
 This identity is fundamental—it connects the **marginal score** (what diffusion models learn) to the **conditional score** (which has a simple closed form for Gaussian kernels). See [force=score.md](../force/force=score.md) for the derivation showing this equals the expected data-space force.
 
-#### Explicit formula for GMM
+### Explicit Formula for GMM
 
 For the Gaussian kernel, the conditional score is:
 ```math
@@ -178,14 +180,14 @@ For the Gaussian kernel, the conditional score is:
 = -(\sigma_t^2\Sigma)^{-1}(\mathbf x_t - \alpha_t\mathbf x_0)
 ```
 
-Since \(p_t\) is a GMM with component covariances \(C_{t,k}=\alpha_t^2\Lambda_k+\sigma_t^2\Sigma\), we can also compute directly:
+Since $p_t$ is a GMM with component covariances $C_{t,k}=\alpha_t^2\Lambda_k+\sigma_t^2\Sigma$, we can also compute directly:
 
 ```math
 \nabla_{\mathbf x_t}\log \mathcal N(\mathbf x_t;\alpha_t\mu_k,C_{t,k})
 =-C_{t,k}^{-1}(\mathbf x_t-\alpha_t\mu_k).
 ```
 
-Weighting by responsibilities gives
+Weighting by responsibilities gives:
 
 ```math
 \boxed{
