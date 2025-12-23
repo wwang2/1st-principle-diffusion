@@ -281,11 +281,11 @@ The naive approach (no Jacobian correction) samples the correct marginal when:
 
 ### Key Takeaways
 
-1. **Coordinate transformation** converts constrained sampling to unconstrained dynamics
-2. The **mass matrix** $M = (J J^\top)^{-1}$ determines anisotropic exploration
-3. **Rank deficiency** in $J$ reflects dimensional reduction; null-space directions are frozen
-4. **Many-to-one maps** require Jacobian correction for unbiased sampling
-5. The **fluctuation-dissipation relation** $\Sigma = M^{-1}$ ensures correct equilibrium
+1. **Coordinate transformation** converts constrained sampling to unconstrained dynamics.
+2. The **mass matrix** $M = (J J^\top)^{-1}$ determines anisotropic exploration.
+3. **Rank deficiency** in $J$ reflects dimensional reduction; null-space directions are frozen.
+4. **Many-to-one maps** require Jacobian correction for unbiased sampling.
+5. The **fluctuation-dissipation relation** $\Sigma = M^{-1}$ ensures correct equilibrium.
 
 ---
 

@@ -4,19 +4,21 @@ The marginal score $\nabla_{x_t} \log p_t(x_t)$ can be expressed entirely in ter
 
 ---
 
-## TL;DR: Score = Expected Force
+## Summary
+
+**Score = Expected Force**
 
 Forward diffusion: $x_t = \alpha_t x_0 + \sigma_t \varepsilon$, where $\varepsilon \sim \mathcal{N}(0, I)$
 
 ### The Derivation (3 lines!)
 
-**1** Marginal score is a posterior expectation
+**1.** Marginal score is a posterior expectation:
 $$\nabla_{x_t} \log p_t(x_t) = \mathbb{E}_{p(x_0|x_t)}\left[\nabla_{x_t} \log q(x_t|x_0)\right]$$
 
-**2** For Gaussian kernel, gradients are related by a simple scaling
+**2.** For Gaussian kernel, gradients are related by a simple scaling:
 $$\nabla_{x_t} \log q(x_t|x_0) = -\frac{1}{\alpha_t}\left(\nabla_{x_0} \log q(x_t|x_0)\right)$$
 
-**3** Apply Bayes rule + score identity ($\mathbb{E}_p[\nabla \log p] = 0$)
+**3.** Apply Bayes' rule + score identity ($\mathbb{E}_p[\nabla \log p] = 0$):
 $$= -\frac{1}{\alpha_t}\mathbb{E}_{p(x_0|x_t)}\left[\underbrace{\nabla_{x_0}\log p(x_0|x_t)}_{=0\text{ by score identity}} - \nabla_{x_0}\log p_0(x_0)\right]$$
 
 ### Main Result
@@ -44,7 +46,7 @@ Both have the **same optimal solution**: $s^*(x_t, t) = \nabla_{x_t}\log p_t(x_t
 
 ---
 
-### Why This Matters
+## Why This Matters
 
 1. **Simplicity**: The derivation is just 3 lines of algebra
 2. **Physical intuition**: Score = force gives immediate intuition from physics
@@ -53,7 +55,7 @@ Both have the **same optimal solution**: $s^*(x_t, t) = \nabla_{x_t}\log p_t(x_t
 
 ---
 
-## Detailed steup
+## Detailed Setup
 
 - Forward kernel: $q(x_t \mid x_0) = \mathcal{N}(x_t; \alpha_t x_0, \sigma_t^2 I)$
 - Data distribution: $p_0(x_0)$
@@ -87,7 +89,7 @@ $$
 
 ---
 
-## Bayes Rule Decomposition
+## Bayes' Rule Decomposition
 
 From Bayes' rule $p(x_0 \mid x_t) \propto q(x_t \mid x_0) p_0(x_0)$:
 
@@ -97,7 +99,7 @@ $$
 
 ---
 
-## Plug the defintions back
+## Substituting Definitions
 
 The marginal score is:
 
@@ -163,7 +165,6 @@ $$
 
 Both objectives are **equivalent** at the population level—they have the same minimizer.
 
-
 ### Single-Sample Approximation
 
 Using the denoiser $\hat{x}_0 = \mathbb{E}[x_0 \mid x_t]$:
@@ -174,7 +175,7 @@ $$
 
 ---
 
-## Summary
+## Summary Table
 
 | Quantity | Expression |
 |----------|------------|

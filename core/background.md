@@ -1,27 +1,31 @@
-## Diffusion (forward + reverse) — minimal notes
+# Diffusion (Forward + Reverse) — Minimal Notes
 
-### Def.
-- Data: $\mathbf{x}_0$ (clean sample), typically $\mathbf{x}_0\in\mathbb{R}^{N\times d}$ (often $d=3$)
-- Time: $t\in[0,1]$ (0=data, 1=prior/noise)
-- Schedules: $\alpha_t$ (signal scale), $\sigma_t$ (noise scale). VP: $\sigma_t^2=1-\alpha_t^2$
-- Covariance: $\Sigma = \mathbf{R}\mathbf{R}^\top$ (isotropic special case: $\Sigma=\mathbf{I}$)
-- Noise: $z\sim\mathcal N(0,\mathbf{I})$ so $\mathbf{R}z\sim\mathcal N(0,\mathbf{R}\mathbf{R}^\top)$
-- Marginal: $p_t(\mathbf{x})$ (noise-convolved marginal)
-- Score: $s_t(\mathbf{x})=\nabla_{\mathbf{x}}\log p_t(\mathbf{x})$
-- Denoiser: $\hat{\mathbf{x}}_\theta(\mathbf{x}_t,t)\approx\mathbb E[\mathbf{x}_0\mid \mathbf{x}_t]$
+## Definitions
 
-### Forward diffusion
+- **Data**: $\mathbf{x}_0$ (clean sample), typically $\mathbf{x}_0\in\mathbb{R}^{N\times d}$ (often $d=3$)
+- **Time**: $t\in[0,1]$ (0=data, 1=prior/noise)
+- **Schedules**: $\alpha_t$ (signal scale), $\sigma_t$ (noise scale). VP: $\sigma_t^2=1-\alpha_t^2$
+- **Covariance**: $\Sigma = \mathbf{R}\mathbf{R}^\top$ (isotropic special case: $\Sigma=\mathbf{I}$)
+- **Noise**: $z\sim\mathcal N(0,\mathbf{I})$ so $\mathbf{R}z\sim\mathcal N(0,\mathbf{R}\mathbf{R}^\top)$
+- **Marginal**: $p_t(\mathbf{x})$ (noise-convolved marginal)
+- **Score**: $s_t(\mathbf{x})=\nabla_{\mathbf{x}}\log p_t(\mathbf{x})$
+- **Denoiser**: $\hat{\mathbf{x}}_\theta(\mathbf{x}_t,t)\approx\mathbb E[\mathbf{x}_0\mid \mathbf{x}_t]$
+
+## Forward Diffusion
+
 **Kernel:** $q(\mathbf{x}_t\mid \mathbf{x}_0)=\mathcal N\big(\alpha_t \mathbf{x}_0,\,\sigma_t^2\Sigma\big)$, i.e. $\mathbf{x}_t = \alpha_t \mathbf{x}_0 + \sigma_t \mathbf{R} z$ with $z\sim\mathcal N(0,\mathbf{I})$
 
 **Marginal:** $p_t(\mathbf{x}_t)=\int q(\mathbf{x}_t\mid \mathbf{x}_0)\,p_0(\mathbf{x}_0)\,d\mathbf{x}_0$
 
-### Forward SDE (OU process)
+## Forward SDE (OU Process)
+
 ```math
 d\mathbf{x} = h_t\,\mathbf{x}\,dt + g_t\,\mathbf{R}\,d\mathbf{w}, \quad h_t=\frac{d}{dt}\log\alpha_t, \quad g_t=\sqrt{-\sigma_t^2\,\frac{d}{dt}\log\mathrm{SNR}_t}
 ```
 (VP case: $d\mathbf{x}=-\tfrac12\beta_t \mathbf{x}\,dt+\sqrt{\beta_t}\,\mathbf{R}\,d\mathbf{w}$)
 
-### Reverse SDE (sampling, $p_1\to p_0$)
+## Reverse SDE (Sampling, $p_1\to p_0$)
+
 ```math
 d\mathbf{x} = \big(h_t \mathbf{x} - g_t^2\,\Sigma\, \nabla_{\mathbf{x}}\log p_t(\mathbf{x})\big)\,dt + g_t\,\mathbf{R}\,d\bar{\mathbf{w}}
 ```
@@ -29,11 +33,11 @@ d\mathbf{x} = \big(h_t \mathbf{x} - g_t^2\,\Sigma\, \nabla_{\mathbf{x}}\log p_t(
 
 ---
 
-### Training Target: Denoising Score Matching
+## Training Target: Denoising Score Matching
 
 > **The core training objective:** Learn to predict the score $\nabla_{\mathbf{x}} \log p_t(\mathbf{x})$ at each noise level $t$.
 
-#### Ground-truth score for the forward kernel
+### Ground-Truth Score for the Forward Kernel
 
 Given the forward kernel $q(\mathbf{x}_t \mid \mathbf{x}_0) = \mathcal{N}(\mathbf{x}_t; \alpha_t \mathbf{x}_0, \sigma_t^2 \Sigma)$, the conditional score is:
 
@@ -43,7 +47,7 @@ Given the forward kernel $q(\mathbf{x}_t \mid \mathbf{x}_0) = \mathcal{N}(\mathb
 
 where $z \sim \mathcal{N}(0, \mathbf{I})$ is the noise used to construct $\mathbf{x}_t = \alpha_t \mathbf{x}_0 + \sigma_t \mathbf{R} z$.
 
-#### Denoising score matching loss
+### Denoising Score Matching Loss
 
 The training objective minimizes the expected squared error between the model's predicted score and the ground-truth conditional score:
 
@@ -53,7 +57,7 @@ The training objective minimizes the expected squared error between the model's 
 
 where $\lambda(t)$ is a time-dependent weighting function.
 
-#### Equivalent parameterizations
+### Equivalent Parameterizations
 
 The network can equivalently predict different quantities, all related by simple transformations:
 
@@ -67,7 +71,7 @@ The network can equivalently predict different quantities, all related by simple
 
 ---
 
-### Fokker-Planck equation (density evolution)
+## Fokker-Planck Equation (Density Evolution)
 
 The evolution of a probability density under an SDE is governed by the **Fokker-Planck equation** (FPE, also called Kolmogorov forward equation). For a general SDE $d\mathbf{x} = \mathbf{f}(\mathbf{x},t)\,dt + g_t\mathbf{R}\,d\mathbf{w}$:
 
@@ -87,7 +91,7 @@ Expanding both terms:
 
 ---
 
-### Sister equation: Fokker-Planck vs Schrödinger
+## Relation to Schrödinger Equation
 
 The FPE has a deep connection to quantum mechanics via the **Cole-Hopf transformation**.
 
@@ -110,11 +114,11 @@ where the "potential" $U$ relates to the drift. This connection underlies:
 
 ---
 
-### From PDE to ODE: the log-derivative trick
+## From PDE to ODE: The Log-Derivative Trick
 
 **Goal:** Given a PDE governing density evolution, derive an ODE for individual sample trajectories that preserves the same marginals.
 
-#### Step 1: Continuity equation for ODEs
+### Step 1: Continuity Equation for ODEs
 
 For a deterministic flow $\frac{d\mathbf{x}}{dt} = \mathbf{v}(\mathbf{x}, t)$, conservation of probability mass gives the **continuity equation**:
 
@@ -124,7 +128,7 @@ For a deterministic flow $\frac{d\mathbf{x}}{dt} = \mathbf{v}(\mathbf{x}, t)$, c
 
 This says: the rate of change of density at a point equals the net flux of probability out of that point.
 
-#### Step 2: Log-derivative identity
+### Step 2: Log-Derivative Identity
 
 Taking $\frac{\partial}{\partial t}\log p_t = \frac{1}{p_t}\frac{\partial p_t}{\partial t}$ and using the continuity equation:
 
@@ -144,7 +148,7 @@ Using $\nabla \log p_t = \frac{\nabla p_t}{p_t}$:
 \boxed{\frac{\partial \log p_t(\mathbf{x})}{\partial t} = -\nabla \cdot \mathbf{v} - \mathbf{v} \cdot \nabla \log p_t}
 ```
 
-#### Step 3: Instantaneous change of variables (FFJORD / Neural ODEs)
+### Step 3: Instantaneous Change of Variables (FFJORD / Neural ODEs)
 
 For a sample $\mathbf{x}_t$ following the ODE, the total derivative of log-density along its path is:
 
@@ -166,7 +170,7 @@ The $\mathbf{v} \cdot \nabla \log p_t$ terms cancel! Integrating:
 
 This **instantaneous change of variables** formula is the foundation of FFJORD and continuous normalizing flows.
 
-### Probability flow ODE (deterministic)
+## Probability Flow ODE (Deterministic)
 
 **Key fact:** For any SDE with drift $\mathbf{f}$ and diffusion $g$, there exists a deterministic ODE with identical marginals $p_t$.
 
@@ -189,13 +193,13 @@ The score $s_t = \nabla \log p_t$ appears as the correction term accounting for 
 
 ---
 
-### Summary: Forward SDE → Reverse SDE → ODE
+## Summary: Forward SDE → Reverse SDE → ODE
 
 A unified view of the three processes that all share the **same marginal densities** $p_t(\mathbf{x})$.
 
 ---
 
-#### 1. Forward SDE (data → noise)
+### 1. Forward SDE (Data → Noise)
 
 ```math
 d\mathbf{x} = \underbrace{h_t \mathbf{x}}_{\text{drift}} dt + \underbrace{g_t \mathbf{R}}_{\text{diffusion}} d\mathbf{w}
@@ -208,7 +212,7 @@ d\mathbf{x} = \underbrace{h_t \mathbf{x}}_{\text{drift}} dt + \underbrace{g_t \m
 
 ---
 
-#### 2. Reverse SDE (noise → data)
+### 2. Reverse SDE (Noise → Data)
 
 **Anderson's time-reversal theorem (1982):** Any SDE can be reversed in time. For forward SDE with drift $\mathbf{f}$ and diffusion $g$:
 
@@ -238,7 +242,7 @@ For reverse time $\tau = 1-t$, we need $\frac{\partial p}{\partial \tau} = -\fra
 
 ---
 
-#### 3. Probability Flow ODE (deterministic equivalent)
+### 3. Probability Flow ODE (Deterministic Equivalent)
 
 **Key observation:** The diffusion term in the FPE can be rewritten using the score:
 
@@ -264,7 +268,7 @@ This is a **continuity equation** (no diffusion term!), corresponding to the ODE
 
 ---
 
-#### Side-by-side comparison
+### Side-by-Side Comparison
 
 | | **Forward SDE** | **Reverse SDE** | **Probability Flow ODE** |
 |---|---|---|---|
@@ -279,18 +283,17 @@ This is a **continuity equation** (no diffusion term!), corresponding to the ODE
 
 ---
 
-### Extended Solution Space: Equilibration Factor
+## Extended Solution Space: Equilibration Factor
 
 **Key insight:** The reverse SDE and probability flow ODE are not the only processes that preserve the marginals $p_t$. There exists an **infinite family of SDEs** parameterized by an equilibration factor $\psi(t) \geq 0$.
 
-#### General form
+### General Form
 
 ```math
 d\mathbf{x} = \left(h_t \mathbf{x} - \left(g_t^2 + \tfrac{1}{2}\psi(t)^2\right) \mathbf{R}\mathbf{R}^{\intercal}\, \nabla_{\mathbf{x}} \log p_t(\mathbf{x}) \right) dt + \psi(t)\,\mathbf{R}\, d\bar{\mathbf{w}}
 ```
 
-
-#### Why this preserves marginals
+### Why This Preserves Marginals
 
 The Fokker-Planck equation for a general SDE $d\mathbf{x} = \mathbf{f}\, dt + \sigma\, d\mathbf{w}$ is:
 
@@ -324,7 +327,7 @@ Rewriting the second term back:
 
 This recovers **exactly the same FPE** as the reverse-time process! The equilibration factor $\psi(t)$ adds extra noise that is immediately corrected by the enhanced score term (the $\tfrac{1}{2}\psi^2$ contribution), leaving the marginal evolution unchanged.
 
-#### Special cases
+### Special Cases
 
 | $\psi(t)$ | **Resulting process** |
 |-----------|----------------------|
@@ -333,14 +336,14 @@ This recovers **exactly the same FPE** as the reverse-time process! The equilibr
 | $\psi = \sqrt{2} g_t$ | Tripled effective diffusion variance |
 | $\psi \gg g_t$ | Langevin-dominated dynamics (strong equilibration) |
 
-#### Interpretation
+### Interpretation
 
 - **Extra stochasticity:** $\psi(t)$ injects additional noise beyond the minimum required for time reversal
 - **Equilibration:** Higher $\psi$ means faster local mixing around the current density—useful when the score estimate is noisy or when exploring multimodal distributions
 - **Half-factor:** The $\tfrac{1}{2}$ in front of $\psi^2$ arises from the FPE diffusion term structure, ensuring exact cancellation
 - **Trade-off:** More noise ($\psi > 0$) can improve robustness but may require smaller step sizes for stability
 
-#### Practical use
+### Practical Use
 
 In practice, $\psi(t)$ can be:
 1. **Constant multiple:** $\psi(t) = c \cdot g_t$ for some $c \geq 0$
