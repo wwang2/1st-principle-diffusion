@@ -189,7 +189,32 @@ Weighting by responsibilities gives
 
 ```math
 \boxed{
- \nabla_{\mathbf x_t}\log p_t(\mathbf x_t)
- =\sum_{k=1}^K r_{t,k}(\mathbf x_t)\,\big[-C_{t,k}^{-1}(\mathbf x_t-\alpha_t\mu_k)\big].
+\nabla_{\mathbf x_t}\log p_t(\mathbf x_t)
+=\sum_{k=1}^K r_{t,k}(\mathbf x_t)\,\big[-C_{t,k}^{-1}(\mathbf x_t-\alpha_t\mu_k)\big].
 }
 ```
+
+---
+
+### Connection to Kernel Regression and Attention
+
+The derived optimal denoiser has a striking structural similarity to **Nadaraya-Watson Kernel Regression** and modern **Attention mechanisms**.
+
+The oracle denoiser is:
+```math
+\hat{\mathbf{x}}_0(\mathbf{x}_t) = \sum_{k=1}^K r_{t,k}(\mathbf{x}_t) \, m_{t,k}(\mathbf{x}_t)
+```
+
+This matches the kernel regression form $\hat{y}(x) = \sum_i w_i(x) y_i$, with the following correspondence:
+
+| Concept | Diffusion Oracle Term | Interpretation |
+| :--- | :--- | :--- |
+| **Query** $x$ | $\mathbf{x}_t$ | The noisy state at time $t$ |
+| **Keys** $x_i$ | $\alpha_t \mu_k$ | The (scaled) means of the mixture components |
+| **Values** $y_i$ | $m_{t,k}(\mathbf{x}_t)$ | The **local linear estimate** from component $k$ |
+| **Attention** $w_i$ | $r_{t,k}(\mathbf{x}_t)$ | The **posterior responsibility** (softmax over likelihoods) |
+
+This reveals that **optimal denoising is a parametric attention mechanism**: the model "attends" to the mixture components (memories) that best explain the noisy observation (query) and aggregates their local linear predictions (values).
+
+**Ref:** Milanfar, P. [*From Regression to Attention: A six decade journey*](../ref/From%20Regression%20to%20Attention%20(Public).pdf) (2020).
+

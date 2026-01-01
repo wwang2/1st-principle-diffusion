@@ -1,0 +1,506 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Oracle Attention — Denoising as Regression</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Source+Serif+4:opsz,wght@8..60,400;8..60,600&family=Inter:wght@400;500&family=JetBrains+Mono:wght@400&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        body {
+            font-family: 'Source Serif 4', Georgia, serif;
+            background: #fafafa;
+            color: #1a1a1a;
+            line-height: 1.7;
+            font-size: 18px;
+        }
+
+        .container {
+            max-width: 900px;
+            margin: 0 auto;
+            padding: 3rem 1.5rem 4rem;
+        }
+
+        header { margin-bottom: 2rem; }
+
+        .back-link {
+            font-family: 'Inter', sans-serif;
+            font-size: 0.8rem;
+            color: #666;
+            text-decoration: none;
+            display: inline-block;
+            margin-bottom: 1.5rem;
+        }
+        .back-link:hover { color: #1a1a1a; }
+
+        h1 {
+            font-size: 2rem;
+            font-weight: 600;
+            line-height: 1.2;
+            margin-bottom: 0.5rem;
+            letter-spacing: -0.02em;
+        }
+
+        .subtitle { color: #666; font-size: 1rem; }
+
+        p { margin-bottom: 1rem; color: #333; }
+
+        .viz-wrapper {
+            background: #fff;
+            border: 1px solid #e5e5e5;
+            border-radius: 8px;
+            padding: 1.5rem;
+            margin: 2rem 0;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.02);
+        }
+
+        canvas {
+            width: 100%;
+            height: 200px;
+            margin-bottom: 1rem;
+            display: block;
+        }
+
+        .plot-label {
+            font-family: 'Inter', sans-serif;
+            font-size: 0.75rem;
+            color: #666;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            margin-bottom: 0.5rem;
+            display: flex;
+            justify-content: space-between;
+        }
+
+        .controls {
+            display: flex;
+            align-items: center;
+            gap: 1.5rem;
+            padding-top: 1rem;
+            border-top: 1px solid #eee;
+            margin-top: 1rem;
+            font-family: 'Inter', sans-serif;
+            font-size: 0.8rem;
+        }
+
+        .control-group {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+        
+        input[type="range"] {
+            accent-color: #1a1a1a;
+            width: 120px;
+        }
+
+        .val-display {
+            font-family: 'JetBrains Mono', monospace;
+            width: 40px;
+            text-align: right;
+        }
+
+        .equation-box {
+            background: #f8f8f8;
+            border-radius: 6px;
+            padding: 1rem;
+            margin: 1.5rem 0;
+            font-size: 0.9rem;
+            overflow-x: auto;
+        }
+
+        .attention-panel {
+            display: flex;
+            gap: 4px;
+            height: 20px;
+            margin-bottom: 1.5rem;
+            border-radius: 4px;
+            overflow: hidden;
+            background: #eee;
+        }
+        
+        .attn-bar {
+            height: 100%;
+            transition: width 0.1s;
+        }
+
+        .legend {
+            display: flex;
+            gap: 1rem;
+            font-size: 0.75rem;
+            font-family: 'Inter', sans-serif;
+            color: #666;
+            margin-top: 0.5rem;
+            justify-content: center;
+        }
+        
+        .legend-item {
+            display: flex;
+            align-items: center;
+            gap: 0.3rem;
+        }
+        
+        .dot { width: 8px; height: 8px; border-radius: 50%; }
+
+        footer {
+            margin-top: 3rem;
+            padding-top: 1.25rem;
+            border-top: 1px solid #e5e5e5;
+            font-family: 'Inter', sans-serif;
+            font-size: 0.75rem;
+            color: #999;
+        }
+        footer a { color: #666; text-decoration: none; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <a href="index.html" class="back-link">← back</a>
+            <h1>Oracle Attention</h1>
+            <p class="subtitle">Optimal denoising as a parametric attention mechanism</p>
+        </header>
+
+        <p>
+            The optimal denoiser \(\hat{\mathbf{x}}_0(\mathbf{x}_t)\) for a GMM is exactly a <strong>kernel regression</strong> (or attention) operation.
+            The noisy input \(\mathbf{x}_t\) (Query) attends to the mixture components (Keys) to retrieve local linear estimates (Values).
+        </p>
+
+        <div class="equation-box">
+            <div id="math-eq"></div>
+        </div>
+
+        <div class="viz-wrapper">
+            <!-- Top Plot: Input Space x_t -->
+            <div class="plot-label">
+                <span>1. Query / Input Space (Noisy)</span>
+                <span>x_t = <span id="val-xt" class="val-display">0.00</span></span>
+            </div>
+            <canvas id="inputCanvas"></canvas>
+
+            <!-- Middle: Attention Weights -->
+            <div class="plot-label">
+                <span>2. Attention Weights (Posterior Responsibility)</span>
+                <span>r_k(x_t)</span>
+            </div>
+            <div class="attention-panel" id="attnPanel"></div>
+
+            <!-- Bottom Plot: Output Space x_0 -->
+            <div class="plot-label" style="margin-top: 1.5rem;">
+                <span>3. Value Aggregation / Output Space (Clean)</span>
+                <span>x_0_hat = <span id="val-x0" class="val-display">0.00</span></span>
+            </div>
+            <canvas id="outputCanvas"></canvas>
+
+            <div class="legend">
+                <div class="legend-item"><span class="dot" style="background: #999;"></span> Prior p(x)</div>
+                <div class="legend-item"><span class="dot" style="background: #000;"></span> Query/Output</div>
+                <div class="legend-item"><span class="dot" style="background: #2563eb;"></span> Values (m_k)</div>
+            </div>
+
+            <div class="controls">
+                <div class="control-group">
+                    <span>Noise Level (Time t)</span>
+                    <input type="range" id="timeSlider" min="0" max="0.99" step="0.01" value="0.5">
+                    <span id="timeVal" class="val-display">0.50</span>
+                </div>
+                <div class="control-group" style="flex: 1;">
+                    <span>Query Position x_t</span>
+                    <input type="range" id="xSlider" min="-5" max="7" step="0.05" value="1.0" style="width: 100%;">
+                </div>
+            </div>
+        </div>
+
+        <p>
+            <strong>How it works:</strong>
+        </p>
+        <ul style="margin-left: 1.5rem; margin-bottom: 1.5rem; color: #333;">
+            <li><strong>Query:</strong> The noisy point \(\mathbf{x}_t\) (black line, top).</li>
+            <li><strong>Keys:</strong> The component means \(\alpha_t \mu_k\). The closer \(\mathbf{x}_t\) is to a key (relative to noise), the higher the attention.</li>
+            <li><strong>Values:</strong> Each component proposes a "clean" value \(m_{t,k}(\mathbf{x}_t)\) (colored dots, bottom). Note how these "shrink" the input towards the component mean.</li>
+            <li><strong>Output:</strong> The final estimate \(\hat{\mathbf{x}}_0\) (black dot, bottom) is the weighted average of the Values.</li>
+        </ul>
+
+        <footer>
+            <a href="https://github.com/wujiewang/1st-principle-diffusion">View source</a> · First Principles Diffusion
+        </footer>
+    </div>
+
+    <script>
+        // ============================================================
+        // LOGIC
+        // ============================================================
+        
+        function gaussianPDF(x, mu, sigma2) {
+            return Math.exp(-0.5 * Math.pow(x - mu, 2) / sigma2) / Math.sqrt(2 * Math.PI * sigma2);
+        }
+
+        class GMMOracle {
+            constructor(modes) {
+                this.modes = JSON.parse(JSON.stringify(modes));
+            }
+
+            alpha(t) { return Math.sqrt(1 - t); }
+            sigma2_noise(t) { return t + 0.001; }
+
+            // Marginal density p_t(x)
+            marginalDensity(x, t) {
+                let d = 0;
+                const a = this.alpha(t);
+                const s2 = this.sigma2_noise(t);
+                
+                for (let k = 0; k < this.modes.length; k++) {
+                    const mu_t = a * this.modes[k].mu;
+                    const var_t = a * a * this.modes[k].sigma2 + s2;
+                    d += this.modes[k].pi * gaussianPDF(x, mu_t, var_t);
+                }
+                return d;
+            }
+
+            // Responsibilities r_{t,k}(x)
+            responsibility(x, t) {
+                const resp = [];
+                let total = 0;
+                const a = this.alpha(t);
+                const s2 = this.sigma2_noise(t);
+
+                for (let k = 0; k < this.modes.length; k++) {
+                    const mu_t = a * this.modes[k].mu;
+                    const var_t = a * a * this.modes[k].sigma2 + s2;
+                    const r = this.modes[k].pi * gaussianPDF(x, mu_t, var_t);
+                    resp.push(r);
+                    total += r;
+                }
+                return resp.map(r => r / (total + 1e-10));
+            }
+
+            // Component-conditional mean (Value) m_{t,k}(x)
+            // E[x0 | xt, k]
+            componentValue(x, t, k) {
+                const m = this.modes[k];
+                const a = this.alpha(t);
+                const s2_noise = this.sigma2_noise(t);
+                
+                // Prior params
+                const mu_0 = m.mu;
+                const prec_0 = 1 / m.sigma2;
+                
+                // Likelihood params x_t | x_0 ~ N(a*x_0, s2_noise)
+                // This is equivalent to x_0 likelihood ~ N(x_t/a, s2_noise/a^2) ? No.
+                // Standard formula:
+                // V_{t,k} = (1/sigma2_k + a^2/sigma2_noise)^-1
+                // m_{t,k} = V_{t,k} * (mu_k/sigma2_k + a*x_t/sigma2_noise)
+                
+                const prec_noise = 1 / s2_noise;
+                const post_prec = prec_0 + a * a * prec_noise;
+                const post_var = 1 / post_prec;
+                
+                const post_mean = post_var * (mu_0 * prec_0 + x * a * prec_noise);
+                return post_mean;
+            }
+
+            // Total estimate
+            denoise(x, t) {
+                const resp = this.responsibility(x, t);
+                let x0_hat = 0;
+                const values = [];
+                
+                for (let k = 0; k < this.modes.length; k++) {
+                    const val = this.componentValue(x, t, k);
+                    values.push(val);
+                    x0_hat += resp[k] * val;
+                }
+                
+                return { x0_hat, values, resp };
+            }
+        }
+
+        // ============================================================
+        // VIZ
+        // ============================================================
+        
+        const modeColors = ['#2563eb', '#9333ea', '#059669', '#ea580c'];
+        const modes = [
+            { pi: 0.4, mu: -2.0, sigma2: 0.3 },
+            { pi: 0.3, mu: 1.5, sigma2: 0.4 },
+            { pi: 0.3, mu: 4.5, sigma2: 0.3 },
+        ];
+        
+        const gmm = new GMMOracle(modes);
+        
+        const inputCanvas = document.getElementById('inputCanvas');
+        const outputCanvas = document.getElementById('outputCanvas');
+        const xSlider = document.getElementById('xSlider');
+        const timeSlider = document.getElementById('timeSlider');
+        
+        const xRange = [-6, 8];
+        
+        function setupCanvas(c) {
+            const dpr = window.devicePixelRatio || 1;
+            const rect = c.getBoundingClientRect();
+            c.width = rect.width * dpr;
+            c.height = rect.height * dpr;
+            const ctx = c.getContext('2d');
+            ctx.scale(dpr, dpr);
+            return { w: rect.width, h: rect.height, ctx };
+        }
+        
+        function toPx(x, w) {
+            return (x - xRange[0]) / (xRange[1] - xRange[0]) * w;
+        }
+        
+        function draw() {
+            const t = parseFloat(timeSlider.value);
+            const xt = parseFloat(xSlider.value);
+            
+            document.getElementById('val-xt').textContent = xt.toFixed(2);
+            document.getElementById('timeVal').textContent = t.toFixed(2);
+            
+            const { x0_hat, values, resp } = gmm.denoise(xt, t);
+            document.getElementById('val-x0').textContent = x0_hat.toFixed(2);
+            
+            // --- Input Canvas (p_t(x)) ---
+            const inConf = setupCanvas(inputCanvas);
+            const ctx1 = inConf.ctx;
+            const w1 = inConf.w, h1 = inConf.h;
+            
+            ctx1.clearRect(0, 0, w1, h1);
+            
+            // Draw p_t(x) density
+            ctx1.beginPath();
+            const pad = 20;
+            const ground = h1 - pad;
+            const maxH = h1 - 2 * pad;
+            
+            // Calc max density for scaling
+            let maxD = 0;
+            for(let i=0; i<100; i++) maxD = Math.max(maxD, gmm.marginalDensity(xRange[0] + i*(xRange[1]-xRange[0])/100, t));
+            
+            // Draw density curve
+            ctx1.beginPath();
+            for (let i = 0; i <= w1; i+=2) {
+                const x = xRange[0] + (i/w1) * (xRange[1] - xRange[0]);
+                const d = gmm.marginalDensity(x, t);
+                const y = ground - (d / (maxD + 0.1)) * maxH;
+                i===0 ? ctx1.moveTo(i, y) : ctx1.lineTo(i, y);
+            }
+            ctx1.strokeStyle = '#ccc';
+            ctx1.lineWidth = 2;
+            ctx1.stroke();
+            ctx1.fillStyle = '#f9f9f9';
+            ctx1.fill();
+            
+            // Draw axis
+            ctx1.strokeStyle = '#eee';
+            ctx1.beginPath(); ctx1.moveTo(0, ground); ctx1.lineTo(w1, ground); ctx1.stroke();
+            
+            // Draw xt marker (Query)
+            const xtPx = toPx(xt, w1);
+            ctx1.strokeStyle = '#000';
+            ctx1.lineWidth = 2;
+            ctx1.beginPath();
+            ctx1.moveTo(xtPx, pad);
+            ctx1.lineTo(xtPx, ground);
+            ctx1.stroke();
+            
+            ctx1.fillStyle = '#000';
+            ctx1.font = '12px Inter';
+            ctx1.fillText('xt (Query)', xtPx + 5, pad + 10);
+            
+            
+            // --- Attention Panel ---
+            const attnPanel = document.getElementById('attnPanel');
+            attnPanel.innerHTML = '';
+            resp.forEach((r, k) => {
+                const div = document.createElement('div');
+                div.className = 'attn-bar';
+                div.style.width = (r * 100) + '%';
+                div.style.backgroundColor = modeColors[k];
+                div.title = `Mode ${k+1}: ${(r*100).toFixed(1)}%`;
+                attnPanel.appendChild(div);
+            });
+            
+            
+            // --- Output Canvas (p_0(x) and Estimates) ---
+            const outConf = setupCanvas(outputCanvas);
+            const ctx2 = outConf.ctx;
+            const w2 = outConf.w, h2 = outConf.h;
+            
+            ctx2.clearRect(0, 0, w2, h2);
+            
+            // Draw p_0(x) density (static background)
+            let maxD0 = 0;
+            for(let i=0; i<100; i++) maxD0 = Math.max(maxD0, gmm.marginalDensity(xRange[0] + i*(xRange[1]-xRange[0])/100, 0));
+            
+            ctx2.beginPath();
+            for (let i = 0; i <= w2; i+=2) {
+                const x = xRange[0] + (i/w2) * (xRange[1] - xRange[0]);
+                const d = gmm.marginalDensity(x, 0);
+                const y = ground - (d / (maxD0 + 0.1)) * maxH;
+                i===0 ? ctx2.moveTo(i, y) : ctx2.lineTo(i, y);
+            }
+            ctx2.strokeStyle = '#ddd';
+            ctx2.setLineDash([4, 4]);
+            ctx2.stroke();
+            ctx2.setLineDash([]);
+            
+            // Axis
+            ctx2.strokeStyle = '#eee';
+            ctx2.beginPath(); ctx2.moveTo(0, ground); ctx2.lineTo(w2, ground); ctx2.stroke();
+
+            // Draw Values (m_k)
+            values.forEach((val, k) => {
+                const px = toPx(val, w2);
+                const r = resp[k];
+                
+                // Connection line opacity based on attention
+                if (r > 0.01) {
+                    // Line from value to output? Or just emphasize the dot?
+                    // Let's draw a line from the top (simulating projection) to the dot
+                    ctx2.beginPath();
+                    ctx2.moveTo(px, ground - 15);
+                    ctx2.lineTo(px, ground);
+                    ctx2.strokeStyle = modeColors[k];
+                    ctx2.lineWidth = 1 + r * 3;
+                    ctx2.globalAlpha = 0.3 + r * 0.7;
+                    ctx2.stroke();
+                    ctx2.globalAlpha = 1.0;
+                }
+                
+                // Dot
+                ctx2.beginPath();
+                ctx2.arc(px, ground, 4 + r * 4, 0, 2 * Math.PI);
+                ctx2.fillStyle = modeColors[k];
+                ctx2.fill();
+            });
+            
+            // Draw Output (x0_hat)
+            const x0Px = toPx(x0_hat, w2);
+            ctx2.beginPath();
+            ctx2.arc(x0Px, ground, 6, 0, 2 * Math.PI);
+            ctx2.fillStyle = '#000';
+            ctx2.fill();
+            ctx2.fillStyle = '#000';
+            ctx2.fillText('x0_hat', x0Px - 20, ground - 15);
+        }
+        
+        // Init
+        xSlider.addEventListener('input', draw);
+        timeSlider.addEventListener('input', draw);
+        window.addEventListener('resize', draw);
+        
+        katex.render(
+            "\\hat{\\mathbf{x}}_0(\\mathbf{x}_t) = \\sum_{k=1}^K \\underbrace{r_{t,k}(\\mathbf{x}_t)}_{\\text{Attention}} \\cdot \\underbrace{m_{t,k}(\\mathbf{x}_t)}_{\\text{Value}}", 
+            document.getElementById('math-eq')
+        );
+        
+        draw();
+        
+    </script>
+</body>
+</html>
+
