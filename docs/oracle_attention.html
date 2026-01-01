@@ -8,6 +8,7 @@
     <link href="https://fonts.googleapis.com/css2?family=Source+Serif+4:opsz,wght@8..60,400;8..60,600&family=Inter:wght@400;500&family=JetBrains+Mono:wght@400&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css">
     <script src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js"></script>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
 
@@ -189,9 +190,16 @@
             </div>
             <div class="attention-panel" id="attnPanel"></div>
 
+            <!-- Attention Matrix: Global Responsibility -->
+            <div class="plot-label" style="margin-top: 1.5rem;">
+                <span>3. Attention Matrix (Global Responsibility)</span>
+                <span>r_k(x)</span>
+            </div>
+            <canvas id="attnMatrixCanvas"></canvas>
+
             <!-- Bottom Plot: Output Space x_0 -->
             <div class="plot-label" style="margin-top: 1.5rem;">
-                <span>3. Value Aggregation / Output Space (Clean)</span>
+                <span>4. Value Aggregation / Output Space (Clean)</span>
                 <span>x_0_hat = <span id="val-x0" class="val-display">0.00</span></span>
             </div>
             <canvas id="outputCanvas"></canvas>
@@ -333,6 +341,7 @@
         const gmm = new GMMOracle(modes);
         
         const inputCanvas = document.getElementById('inputCanvas');
+        const attnMatrixCanvas = document.getElementById('attnMatrixCanvas');
         const outputCanvas = document.getElementById('outputCanvas');
         const xSlider = document.getElementById('xSlider');
         const timeSlider = document.getElementById('timeSlider');
@@ -423,6 +432,52 @@
                 div.title = `Mode ${k+1}: ${(r*100).toFixed(1)}%`;
                 attnPanel.appendChild(div);
             });
+
+
+            // --- Attention Matrix Canvas (Global Responsibility Stacked Area) ---
+            const matConf = setupCanvas(attnMatrixCanvas);
+            const ctxM = matConf.ctx;
+            const wM = matConf.w, hM = matConf.h;
+
+            ctxM.clearRect(0, 0, wM, hM);
+
+            // Loop over xRange to compute stacked areas
+            const step = (xRange[1] - xRange[0]) / wM;
+            // We'll iterate pixel by pixel
+            ctxM.globalAlpha = 0.8;
+
+            for (let i = 0; i < wM; i++) {
+                const xVal = xRange[0] + (i / wM) * (xRange[1] - xRange[0]);
+                const localResp = gmm.responsibility(xVal, t);
+
+                let currentH = 0;
+                // localResp sums to 1. We map 0..1 to hM..0 (since y=0 is top)
+                // Actually canvas coords: y=0 is top, y=hM is bottom.
+                // We want to stack from bottom up.
+
+                let yBase = hM;
+
+                for (let k = 0; k < gmm.modes.length; k++) {
+                    const r = localResp[k];
+                    const hBar = r * hM;
+
+                    ctxM.fillStyle = modeColors[k];
+                    ctxM.fillRect(i, yBase - hBar, 1, hBar + 0.5); // +0.5 to avoid gaps
+                    yBase -= hBar;
+                }
+            }
+            ctxM.globalAlpha = 1.0;
+
+            // Draw xt marker on Matrix
+            const xtPxMat = toPx(xt, wM);
+            ctxM.strokeStyle = '#000';
+            ctxM.lineWidth = 1;
+            ctxM.setLineDash([2, 2]);
+            ctxM.beginPath();
+            ctxM.moveTo(xtPxMat, 0);
+            ctxM.lineTo(xtPxMat, hM);
+            ctxM.stroke();
+            ctxM.setLineDash([]);
             
             
             // --- Output Canvas (p_0(x) and Estimates) ---
@@ -497,6 +552,8 @@
             "\\hat{\\mathbf{x}}_0(\\mathbf{x}_t) = \\sum_{k=1}^K \\underbrace{r_{t,k}(\\mathbf{x}_t)}_{\\text{Attention}} \\cdot \\underbrace{m_{t,k}(\\mathbf{x}_t)}_{\\text{Value}}", 
             document.getElementById('math-eq')
         );
+
+        renderMathInElement(document.body);
         
         draw();
         
