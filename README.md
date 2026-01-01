@@ -22,3 +22,4 @@ In addition to the usual references on diffusion models and normalizing flows, t
 - [Maoutsa, Reich, Opper (2020). Interacting particle solutions of Fokker-Planck equations through gradient-log-density estimation](https://arxiv.org/abs/2006.00702)
 - [Jarzynski (1997). Targeted free energy perturbation](https://arxiv.org/abs/cond-mat/0109461)
 - [Vargas, Padhy, Blessing, Nüsken (2024). Transport meets Variational Inference: Controlled Monte Carlo Diffusions](https://openreview.net/forum?id=PP1rudnxiW)
+- [Milanfar (2020). From Regression to Attention: A six decade journey](ref/From%20Regression%20to%20Attention%20(Public).pdf)
