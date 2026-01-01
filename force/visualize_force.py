@@ -25,7 +25,7 @@ np.random.seed(42)
 DEVICE = "cpu"  # CPU is sufficient for these 2D demos and often easier for plotting
 
 def default_out_dir() -> Path:
-    out = Path.home() / "temp_scripts" / "1st-principle-diffusion" / "force"
+    out = Path(__file__).resolve().parent.parent / "assets" / "force"
     out.mkdir(parents=True, exist_ok=True)
     return out
 

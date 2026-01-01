@@ -18,7 +18,7 @@ DEVICE = "mps" if torch.backends.mps.is_available() else "cpu"
 
 def default_out_dir() -> Path:
     # Keep generated outputs out of the repo.
-    out = Path.home() / "temp_scripts" / "1st-principle-diffusion" / "manifold"
+    out = Path(__file__).resolve().parent.parent / "assets" / "manifold"
     out.mkdir(parents=True, exist_ok=True)
     return out
 
@@ -1749,8 +1749,7 @@ if __name__ == "__main__":
     fig.suptitle(f"Disk Sampling: Effect of ∇log|det J| Correction ({proj_name})", fontsize=13, fontweight='bold')
 
     # Save to project manifold directory
-    manifold_dir = Path(__file__).parent
-    out_path = manifold_dir / "disk_comparison.png"
+    out_path = out_dir / "disk_comparison.png"
     fig.savefig(out_path)
     plt.close(fig)
     print(f"Saved figure to {out_path}")
@@ -1944,7 +1943,7 @@ if __name__ == "__main__":
     fig.suptitle(f"Star Sampling: Effect of ∇log|det J| Correction ({STAR_N_POINTS}-point star)", fontsize=13, fontweight='bold')
 
     # Save to project manifold directory
-    out_path = manifold_dir / "star_shape.png"
+    out_path = out_dir / "star_shape.png"
     fig.savefig(out_path)
     plt.close(fig)
     print(f"Saved figure to {out_path}")
@@ -1989,5 +1988,5 @@ if __name__ == "__main__":
     )
 
     print("\n✓ All demos completed.")
-    print(f"  Comparison plots saved to: {manifold_dir}")
+    print(f"  Comparison plots saved to: {out_dir}")
     print(f"  Other plots saved to: {out_dir}")
